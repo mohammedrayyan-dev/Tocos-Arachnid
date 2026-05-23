@@ -1,1 +1,7 @@
+@import url('https://googleapis.com');
 @import "tailwindcss";
+
+@theme {
+  --font-hanken: "Hanken Grotesk", sans-serif;
+  --font-libre: "Libre Caslon Text", sans-serif;
+}
