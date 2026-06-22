@@ -1,3 +1,12 @@
+# Production Build Outputs
+dist
+dist-ssr
+build/
+out/
+
+# Dependencies
+node_modules/
+
 # Logs
 logs
 *.log
@@ -7,18 +16,23 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Environment Variables & Secrets
+.env
 *.local
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# macOS System Files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.fseventsd
