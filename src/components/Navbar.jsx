@@ -57,7 +57,7 @@ const menuData = [
     },
     {
         label: "Beginners",
-        href: "/product"
+        href: "/beginner-guide"
     },
     {
         label: "Care Guides",
@@ -133,8 +133,8 @@ const Navbar = () => {
                 })}
         </div>
 
-        <div className="flex flex-row items-center gap-4 bg-[#F0EDED] border border-[#C2C8C0] py-2 px-8 rounded-lg">
-            <img src={Search} alt="Search" className="object-contain" />
+        <div className="flex flex-row items-center justify-start gap-4 bg-[#F0EDED] border border-[#C2C8C0] p-3 w-[349px] rounded-lg">
+            <img src={Search} alt="Search" className="w-6 object-contain" />
             <input 
             type="text" 
             placeholder="Search our collection..."
@@ -143,12 +143,13 @@ const Navbar = () => {
         </div>
 
         <div className="flex flex-row items-center gap-4">
-            <Link>
-                <img src={Cart} alt="Cart" className="object-contain" />
+            <Link
+            to="/cart">
+                <img src={Cart} alt="Cart" className="w-5 object-contain" />
             </Link>
-            <Link>
-                <img src={Profile} alt="Profile" className="object-contain" />
-            </Link>
+            <button>
+                <img src={Profile} alt="Profile" className="w-5 object-contain" />
+            </button>
         </div>
 
         <button
