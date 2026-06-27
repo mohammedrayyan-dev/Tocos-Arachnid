@@ -1,4 +1,4 @@
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 import TocoLogo from "/src/assets/image/tocos-logo.png"
 import Container from './common/Container'
 import { Link, NavLink } from 'react-router-dom'
@@ -7,6 +7,7 @@ import Search from "/src/assets/image/icons/search.svg"
 import Cart from "/src/assets/image/icons/cart.svg"
 import Profile from "/src/assets/image/icons/profile.svg"
 import CustomerLogin from '../pages/CustomerLogin'
+import { searchProducts } from '../data/productService'
 
 const menuData = [
     {
@@ -17,29 +18,25 @@ const menuData = [
         label: "Shop",
         options: [ 
             {
-                label: "Isopods",
-                subOptions: [ "All Isopods" , "Colony" ]
-            },
-            {
                 label: "Tarantulas",
-                subOptions: []
+                subOptions: [ "New World", "Old World" ]
             },
             {
                 label: "Tailless Amphibians",
-                subOptions: []
+                subOptions: [ "Pacman", "Tree Frog" ]
             },
             {
                 label: "Reptiles",
-                subOptions: []
+                subOptions: [ "Snakes", "Lizards" ]
             },
             {
                 label: "Live Feeds",
-                subOptions: []
+                subOptions: [ "Worms", "Roaches" ]
             },
          ]
     },
     {
-        label: "Enclosue",
+        label: "Enclosure",
         options: [ 
             {
                 label: "Acrylic Enclosure",
@@ -51,13 +48,9 @@ const menuData = [
             },
             {
                 label: "Accessories",
-                subOptions: [ "", "" ]
+                subOptions: [ "Lights", "Substrates" ]
             },
          ]
-    },
-    {
-        label: "Beginners",
-        href: "/beginner-guide"
     },
     {
         label: "Care Guides",
@@ -71,6 +64,10 @@ const Navbar = () => {
     const [activeOption, setActiveOption] = useState(null)
 
     const [showLogin, setShowLogin] = useState(false)
+
+    const [searchTerm, setSearchTerm] = useState("")
+    const [searchResults, setSearchResults] = useState([])
+    const [searchLoading, setSearchLoading] = useState(false)
 
     const toggleMenu = (m) => {
         const isAlreadyOpen = openMenu === m.label
@@ -86,10 +83,28 @@ const Navbar = () => {
     const openItem = menuData.find((m) => m.label === openMenu)
     const currentOption = openItem?.options.find((o) => o.label === activeOption)
 
+    const toSlug = (str) => str.toLowerCase().replace(/\s+/g, "-")
+
+    useEffect(() => {
+        if (searchTerm.trim() === "") {
+            setSearchResults([])
+            return
+        }
+
+        setSearchLoading(true)
+        const timeout = setTimeout(async() => {
+            const results = await searchProducts(searchTerm)
+            setSearchResults(results)
+            setSearchLoading(false)
+        }, 300)
+
+        return () => clearTimeout(timeout)
+    }, [searchTerm])
+
   return (
     <>
 
-    <div className="bg-[#FCF9F8] py-4">
+    <div className="bg-[#FCF9F8] py-4 relative">
 
         <Container>
 
@@ -133,14 +148,54 @@ const Navbar = () => {
                 })}
         </div>
 
-        <div className="flex flex-row items-center justify-start gap-4 bg-[#F0EDED] border border-[#C2C8C0] p-3 w-[349px] rounded-lg">
-            <img src={Search} alt="Search" className="w-6 object-contain" />
-            <input 
-            type="text" 
+    <div className="relative">
+    <div className="flex flex-row items-center justify-start gap-4 bg-[#F0EDED] border border-[#C2C8C0] p-3 w-[349px] rounded-lg">
+        <img src={Search} alt="Search" className="w-6 object-contain" />
+        <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search our collection..."
-            className="font-sand text-sm text-[#6B7280] focus:outline-none"
-            />
+            className="font-sand text-sm text-[#6B7280] focus:outline-none w-full bg-transparent"
+        />
+    </div>
+
+    {searchTerm.trim() !== "" && (
+        <div className="absolute top-full left-0 mt-2 w-full bg-white border border-[#CFD3D4] rounded-lg shadow-sm z-50 max-h-80 overflow-y-auto">
+            {searchLoading && (
+                <p className="px-4 py-3 text-sm text-[#6B7280]">Searching...</p>
+            )}
+
+            {!searchLoading && searchResults.length === 0 && (
+                <p className="px-4 py-3 text-sm text-[#6B7280]">No products found.</p>
+            )}
+
+            {!searchLoading && searchResults.map((product) => {
+                const toSlug = (str) => str.toLowerCase().replace(/\s+/g, "-")
+                return (
+                    <Link
+                        key={product.id}
+                        to={`/${toSlug(product.category)}/${toSlug(product.sub_category)}/${toSlug(product.deep_category)}/${product.slug}`}
+                        onClick={() => setSearchTerm("")}
+                        className="flex flex-row items-center gap-3 px-4 py-2 hover:bg-[#F0EDED]"
+                    >
+                        <img
+                            src={product.thumbnail}
+                            alt={product.name}
+                            className="w-10 h-10 object-cover rounded"
+                        />
+                        <div className="flex flex-col">
+                            <span className="text-sm text-[#163422]">{product.name}</span>
+                            <span className="text-xs text-[#6B7280]">₹{Number(product.price).toFixed(2)}</span>
+                        </div>
+                    </Link>
+                )
+            })}
         </div>
+    )}
+</div>
+
+        
 
         <div className="flex flex-row items-center gap-4">
             <Link
@@ -162,10 +217,8 @@ const Navbar = () => {
 
         </Container>
 
-    </div>
-
-    {openItem && (
-                    <div className="absolute bg-white border-t border-[#785832] flex flex-row z-50 w-full">
+            {openItem && (
+                    <div className="absolute top-full bg-white border-t border-[#785832] flex flex-row z-50 w-full">
 
                         <div className="flex flex-col gap-5 min-w-[244px] p-8">
                             {openItem.options.map((o) => (
@@ -184,7 +237,7 @@ const Navbar = () => {
                             {currentOption?.subOptions.map((sub, i) => (
                                 <Link
                                 key={i}
-                                to="/"
+                                to={`/${toSlug(openItem.label)}/${toSlug(currentOption.label)}/${toSlug(sub)}`}
                                 onClick={closeMenu}
                                 className="font-hanken text-base text-[#424843]">
                                     {sub}
@@ -194,6 +247,10 @@ const Navbar = () => {
 
                     </div>
                 )}
+
+    </div>
+
+
         
         {showLogin && (
             <CustomerLogin onClose={() => setShowLogin(false)} />
