@@ -1,13 +1,18 @@
-import {useEffect, useState} from 'react'
+import {useEffect, useState} from "react"
 import TocoLogo from "/src/assets/image/tocos-logo.png"
-import Container from './common/Container'
-import { Link, NavLink } from 'react-router-dom'
+import Container from "./common/Container"
+import { Link, NavLink, useNavigate } from "react-router-dom"
 import Arrow from "/src/assets/image/icons/arrow.svg"
 import Search from "/src/assets/image/icons/search.svg"
 import Cart from "/src/assets/image/icons/cart.svg"
 import Profile from "/src/assets/image/icons/profile.svg"
-import CustomerLogin from '../pages/CustomerLogin'
-import { searchProducts } from '../data/productService'
+import SpiderProfile from "/src/assets/image/icons/spider-profile.svg"
+import CustomerLogin from "../pages/CustomerLogin"
+import { searchProducts } from "../data/productService"
+import { useAuth } from "../context/AuthContext"
+import { supabase } from "../lib/supabase"
+import { toast } from "sonner"
+import { signOut } from "../lib/auth"
 
 const menuData = [
     {
@@ -58,7 +63,14 @@ const menuData = [
     }
 ]
 
+const userOption = [
+    { option: "Order History", link: "" },
+    { option: "Accessories", link: "" },
+]
+
 const Navbar = () => {
+
+    const { user } = useAuth()
 
     const [openMenu, setOpenMenu] = useState(null)
     const [activeOption, setActiveOption] = useState(null)
@@ -68,6 +80,37 @@ const Navbar = () => {
     const [searchTerm, setSearchTerm] = useState("")
     const [searchResults, setSearchResults] = useState([])
     const [searchLoading, setSearchLoading] = useState(false)
+    const [userOptions, setUserOptions] = useState(false)
+
+    const navigate = useNavigate()
+
+    const handleUserOptions = () => {
+        if (!user) {
+            setShowLogin(true)
+            toast.info("Please log in to access your account.")
+        } else {
+            setUserOptions(!userOptions)
+        }
+    }
+
+    const handleCartClick = () => {
+        if (!user) {
+            setShowLogin(true)
+            toast.info("Please log in to access your cart.")
+        } else {
+            navigate("/cart")
+        }
+    }
+
+    const handleSignOut = async () => {
+        try {
+            await signOut()
+            setUserOptions(false)
+            toast.success("Logged out successfully!")
+        } catch (error) {
+            toast.error(error.message || "An error occured! please try again")
+        }
+    }
 
     const toggleMenu = (m) => {
         const isAlreadyOpen = openMenu === m.label
@@ -108,7 +151,7 @@ const Navbar = () => {
 
         <Container>
 
-        <div className="flex flex-row items-center justify-between">
+        <div className="flex flex-row items-center justify-center gap-10">
 
         <div className="flex flex-row items-center gap-3">
             <img src={TocoLogo} alt="Toco Logo" className="w-6 h-6 object-contain" />
@@ -175,7 +218,7 @@ const Navbar = () => {
                 return (
                     <Link
                         key={product.id}
-                        to={`/${toSlug(product.category)}/${toSlug(product.sub_category)}/${toSlug(product.deep_category)}/${product.slug}`}
+                        to={`/${toSlug(product.category)}/${toSlug(product.sub_category)}}/${product.slug}`}
                         onClick={() => setSearchTerm("")}
                         className="flex flex-row items-center gap-3 px-4 py-2 hover:bg-[#F0EDED]"
                     >
@@ -193,25 +236,31 @@ const Navbar = () => {
             })}
         </div>
     )}
-</div>
-
-        
+</div>  
 
         <div className="flex flex-row items-center gap-4">
-            <Link
-            to="/cart">
+            <button
+            onClick={handleCartClick}
+            className="cursor-pointer">
                 <img src={Cart} alt="Cart" className="w-5 object-contain" />
-            </Link>
-            <button>
-                <img src={Profile} alt="Profile" className="w-5 object-contain" />
+            </button>
+            <button
+            onClick={handleUserOptions} 
+            className="relative cursor-pointer">
+                {!user ? 
+                <img src={Profile} alt="Profile" className="w-5 object-contain" /> :
+                <img src={SpiderProfile} alt="Spider Profile" className="w-8 object-contain" />
+                }
             </button>
         </div>
 
+        {!user && (
         <button
         onClick={() => setShowLogin(true)}
         className="bg-[#163422] text-white font-sans text-xs py-2 px-6 rounded-md cursor-pointer">
             Sign In
         </button>
+        )}
 
         </div>
 
@@ -237,7 +286,7 @@ const Navbar = () => {
                             {currentOption?.subOptions.map((sub, i) => (
                                 <Link
                                 key={i}
-                                to={`/${toSlug(openItem.label)}/${toSlug(currentOption.label)}/${toSlug(sub)}`}
+                                to={`/${toSlug(currentOption.label)}/${toSlug(sub)}`}
                                 onClick={closeMenu}
                                 className="font-hanken text-base text-[#424843]">
                                     {sub}
@@ -247,6 +296,27 @@ const Navbar = () => {
 
                     </div>
                 )}
+            
+            {userOptions && (
+
+            <div className="absolute right-25 bg-white border border-[#C2C8C0] shadow-xl z-50 p-6">
+                <div className="flex flex-col gap-3 text-right">
+                    {userOption.map((u) => (
+                        <Link 
+                        to={u.link} 
+                        className="font-hanken text-base text-regular hover:text-semibold text-[#424843] hover:text-[#163422]">
+                            {u.option}
+                        </Link>
+                    ))}
+                    <button
+                    onClick={handleSignOut}
+                    className="font-hanken text-base text-regular hover:text-semibold text-[#424843] hover:text-[#163422] text-right cursor-pointer">
+                        Logout
+                    </button>
+                </div>
+            </div>
+
+            )}
 
     </div>
 
