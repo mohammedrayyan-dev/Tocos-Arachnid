@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom"
 import RawBeautys from "../assets/image/raw-beauty-banner.webp"
 import Container from "./common/Container"
 
@@ -16,11 +17,12 @@ const RawBeauty = () => {
                 <p className="font-hanken text-white text-base max-w-2xl text-center">
                     Join a community of enthusiasts who value ethics, expertise, and the preservation of these misunderstood masterpieces of evolution.
                 </p>
-                <button
-                className="bg-[#785832] text-white text-xs py-4 px-15 rounded-sm cursor-pointer"
+                <Link
+                to="/featured/new-arrivals"
+                className="bg-[#785832] text-white text-xs py-4 px-12 rounded-sm cursor-pointer"
                 >
                     View New Arrivals
-                </button>
+                </Link>
             </div>
         </Container>
 
