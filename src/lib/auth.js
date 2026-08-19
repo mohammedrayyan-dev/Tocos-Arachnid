@@ -24,7 +24,29 @@ export const signIn = async (email, password) => {
 }
 
 export const signOut = async () => {
-    await supabase.auth.signOut()
+    try {
+        await supabase.auth.signOut({ scope: 'global' }).catch(async () => {
+            await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+        })
+    } catch (e) {
+        console.error("SignOut error:", e)
+    } finally {
+        try {
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const key = localStorage.key(i)
+                if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token'))) {
+                    localStorage.removeItem(key)
+                }
+            }
+            for (let i = sessionStorage.length - 1; i >= 0; i--) {
+                const key = sessionStorage.key(i)
+                if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token'))) {
+                    sessionStorage.removeItem(key)
+                }
+            }
+            localStorage.removeItem('user_avatar_custom')
+        } catch (e) {}
+    }
 }
 
 export const getCurrentUser = async () => {
