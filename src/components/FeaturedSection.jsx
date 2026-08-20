@@ -23,36 +23,43 @@ const FeaturedSection = ({ type, title, description }) => {
         return () => { isCurrent = false }
     }, [type])
 
-    if (loading) return null
-    if (products.length === "0") return null 
+    if (loading) {
+        return (
+            <Container>
+                <div className="py-8">
+                    <p className="font-hanken text-sm text-[#6B7280]">Loading recommendations...</p>
+                </div>
+            </Container>
+        )
+    }
 
-    const toSlug = (str) => str.toLowerCase().replace(/\s+/g, "-")
+    if (products.length === 0) return null 
 
   return (
 
     <Container>
 
-    <div className="flex flex-col gap-3 py-8">
-        <h1 className="font-libre text-3xl font-semibold text-[#163422]">
-            {title}
-        </h1>  
-
-        <div className="flex flex-row justify-between">
-            <p className="font-hanken text-base text-[#424843]">
-                {description}
-            </p>
+    <div className="flex flex-col gap-1.5 py-6 sm:py-8 md:py-10">
+        <div className="flex flex-row items-center justify-between gap-4">
+            <h1 className="font-libre text-xl sm:text-2xl md:text-3xl font-bold text-[#163422]">
+                {title}
+            </h1>  
             <Link 
-            to={`/featured/${toSlug(type)}`}
-            className="font-hanken text-base text-[#785832] font-medium flex flex-row items-center gap-2">
-                View all
-                <img src={RightArrow} alt="Right Arrow" className="text-[#785832] object-contain" />
+            to={`/featured/${type.toLowerCase().replace(/\s+/g, "-")}`}
+            className="font-hanken text-xs sm:text-sm md:text-base text-[#785832] font-semibold flex flex-row items-center gap-1.5 whitespace-nowrap shrink-0 hover:underline">
+                <span>View all</span>
+                <img src={RightArrow} alt="Right Arrow" className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#785832] object-contain shrink-0" />
             </Link>
         </div>
+
+        <p className="font-hanken text-xs sm:text-sm md:text-base text-[#424843]">
+            {description}
+        </p>
     </div>
 
-    <div className="flex flex-row gap-10">
+    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-12 sm:mb-16">
     {products.map((p) => (
-        <ProductCard key={p.id} product={p} />
+        <ProductCard key={p.id} product={p} fromLabel={title} />
     ))}
     </div>
 

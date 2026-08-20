@@ -1,3 +1,4 @@
+import React from 'react'
 import Container from './common/Container'
 import Stars from "/src/assets/image/icons/star.svg"
 
@@ -24,67 +25,54 @@ const keepers = [
 
 const KeepersSay = () => {
   return (
-
-    <div className="bg-[#F6F3F2] w-full  py-20">
-
+    <div className="bg-[#F6F3F2] w-full py-12 sm:py-16 lg:py-20">
         <Container>
-
-            <div className="flex flex-col items-center justify-center gap-15">
-
-            <div className="flex flex-col items-center justify-center gap-5">
-            <h1 className="font-libre text-5xl font-semibold text-[#163422]">
-                What our keepers say
-            </h1>
-            <p className="text-[#163422] font-hanken text-base font-semibold">
-                Trusted by collectors across the nation.
-            </p>
-            </div>
-
-            <div className="flex flex-row justify-around gap-10">
-                {keepers.map((k) => (
-                <div className="bg-[#FCF9F8] border border-[#C2C8C0] w-[368px] h-[287px] p-10 flex flex-col gap-4 rounded-lg">
-
-                    <div className="flex flex-row gap-2">
-                    {Array.from({ length: 5}).map((_, i) => (
-                    <img key={i} src={Stars} alt="Stars" className="w-4 object-contain" />
-                    ))}
-                    </div>
-
-                    <div className="flex flex-col items-center"> 
-
-                    <p className="text-[#424843] font-hanken text-base text-center">
-                        "{k.feedback}"
+            <div className="flex flex-col items-center justify-center gap-8 sm:gap-12">
+                <div className="flex flex-col items-center justify-center gap-3 text-center">
+                    <h1 className="font-libre text-3xl sm:text-4xl lg:text-5xl font-semibold text-[#163422]">
+                        What our keepers say
+                    </h1>
+                    <p className="text-[#163422] font-hanken text-xs sm:text-sm font-semibold">
+                        Trusted by collectors across the nation.
                     </p>
-
-                    </div>
-
-                    <div className="flex flex-row items-center gap-4">
-                    <p className="bg-[#C8EBD0] w-[40px] h-[40px] flex items-center font-hanken justify-center rounded-xl ">
-                        {k.initial}
-                    </p>
-
-                    
-
-                    <div className="flex flex-col">
-                    <h2 className="font-libre text-xl text-[#1C1B1B]">
-                        {k.name}
-                    </h2>
-                    <p className="text-[#424843] font-hanken text-xs uppercase">
-                        {k.role}
-                    </p>
-                    </div>
-                    </div>
-                    
                 </div>
-                ))}
-            </div>
 
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 w-full">
+                    {keepers.map((k, idx) => (
+                        <div 
+                            key={idx} 
+                            className="bg-[#FCF9F8] border border-[#C2C8C0] p-6 sm:p-8 flex flex-col justify-between gap-4 rounded-xl shadow-2xs hover:shadow-xs transition min-h-60"
+                        >
+                            <div className="flex flex-col gap-3">
+                                <div className="flex flex-row gap-1">
+                                    {Array.from({ length: 5}).map((_, i) => (
+                                        <img key={i} src={Stars} alt="Stars" className="w-3.5 h-3.5 object-contain" />
+                                    ))}
+                                </div>
+                                <p className="text-[#424843] font-hanken text-xs sm:text-sm leading-relaxed italic">
+                                    "{k.feedback}"
+                                </p>
+                            </div>
 
+                            <div className="flex flex-row items-center gap-3 pt-2 border-t border-[#E5E2DC]">
+                                <p className="bg-[#C8EBD0] w-9 h-9 flex items-center font-hanken font-bold text-xs justify-center rounded-xl shrink-0 text-[#163422]">
+                                    {k.initial}
+                                </p>
+                                <div className="flex flex-col min-w-0">
+                                    <h2 className="font-libre text-sm sm:text-base font-bold text-[#1C1B1B] truncate">
+                                        {k.name}
+                                    </h2>
+                                    <p className="text-[#6E756F] font-hanken text-[10px] font-bold uppercase tracking-wider">
+                                        {k.role}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
         </Container>
-
     </div>
-
   )
 }
 
