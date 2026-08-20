@@ -1,8 +1,8 @@
-import HeroSection from "../components/HeroSection"
-import FeaturedSection from "../components/FeaturedSection"
-import Adoption from "../components/Adoption"
-import RawBeauty from "../components/RawBeauty"
-import KeepersSay from "../components/KeepersSay"
+import HeroSection from "../../components/HeroSection"
+import FeaturedSection from "../../components/FeaturedSection"
+import Adoption from "../../components/Adoption"
+import RawBeauty from "../../components/RawBeauty"
+import KeepersSay from "../../components/KeepersSay"
 
 const Home = () => {
   return (
