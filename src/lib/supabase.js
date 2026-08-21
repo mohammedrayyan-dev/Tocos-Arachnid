@@ -74,8 +74,11 @@ const customFetch = async (input, init = {}) => {
     }
 }
 
+const targetUrl = supabaseUrl || ''
+const targetKey = supabaseAnonKey || ''
+
 if (!globalThis.__supabaseInstance) {
-    globalThis.__supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    globalThis.__supabaseInstance = createClient(targetUrl, targetKey, {
         auth: {
             persistSession: true,
             autoRefreshToken: true,
