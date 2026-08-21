@@ -1,71 +1,136 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import TocoLogo from "/src/assets/image/tocos-logo.png"
 import { signIn } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { toast } from 'sonner'
 import AuthBanner from "/src/assets/image/auth-banner.webp"
+import { AlertCircle } from 'lucide-react'
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const SignIn = () => {
   const navigate = useNavigate()
-  const { user, isAdmin, checkAdminRole, setSessionUser } = useAuth()
+  const location = useLocation()
+  const { user, isAdmin, setSessionUser } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [generalError, setGeneralError] = useState('')
   const [formData, setFormData] = useState({
+    email: location.state?.email || '',
+    password: ''
+  })
+  const [errors, setErrors] = useState({
     email: '',
     password: ''
   })
+  const [touched, setTouched] = useState({
+    email: false,
+    password: false
+  })
 
-  // If already logged in, redirect accordingly
+  // If already logged in or when auth state updates, redirect immediately
   useEffect(() => {
     if (user) {
       if (isAdmin) {
         navigate('/admin', { replace: true })
       } else {
-        navigate('/', { replace: true })
+        const returnPath = location.state?.returnTo || '/'
+        navigate(returnPath, { replace: true })
       }
     }
-  }, [user, isAdmin, navigate])
+  }, [user, isAdmin, navigate, location.state])
 
-  if (user) return null
+  const validateField = (name, value) => {
+    let errorMsg = ''
+    if (name === 'email') {
+      const cleanEmail = value?.trim()
+      if (!cleanEmail) {
+        errorMsg = 'Email address is required'
+      } else if (!EMAIL_REGEX.test(cleanEmail)) {
+        errorMsg = 'Please enter a valid email address'
+      }
+    } else if (name === 'password') {
+      if (!value) {
+        errorMsg = 'Password is required'
+      }
+    }
+    return errorMsg
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       [name]: value
-    })
+    }))
+    setGeneralError('')
+
+    if (touched[name]) {
+      const errorMsg = validateField(name, value)
+      setErrors(prev => ({
+        ...prev,
+        [name]: errorMsg
+      }))
+    }
+  }
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target
+    setTouched(prev => ({
+      ...prev,
+      [name]: true
+    }))
+    const errorMsg = validateField(name, value)
+    setErrors(prev => ({
+      ...prev,
+      [name]: errorMsg
+    }))
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
-    if (!formData.email || !formData.password) {
-      toast.error('Please fill in all fields')
+    setGeneralError('')
+
+    const emailErr = validateField('email', formData.email)
+    const passwordErr = validateField('password', formData.password)
+
+    setTouched({ email: true, password: true })
+    setErrors({ email: emailErr, password: passwordErr })
+
+    if (emailErr || passwordErr) {
+      toast.error('Please fix the validation errors before submitting')
       return
     }
 
+    const cleanEmail = formData.email.trim().toLowerCase()
+    const password = formData.password
+
     try {
       setLoading(true)
-      const res = await signIn(formData.email, formData.password)
+      const res = await signIn(cleanEmail, password)
       const loggedUser = res?.user || res?.data?.user
 
       if (loggedUser) {
-        if (setSessionUser) await setSessionUser(loggedUser)
-        const isRoleAdmin = await checkAdminRole(loggedUser)
         toast.success('Signed in successfully!')
+        const { isAdmin: isRoleAdmin } = setSessionUser ? await setSessionUser(loggedUser) : { isAdmin: false }
         if (isRoleAdmin) {
-          navigate('/admin')
+          navigate('/admin', { replace: true })
         } else {
           const returnPath = location.state?.returnTo || '/'
           navigate(returnPath, { replace: true })
         }
       } else {
         toast.success('Signed in successfully!')
-        navigate('/')
+        navigate('/', { replace: true })
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to sign in')
+      console.error('Sign-in error:', error)
+      const errMsg = error.message?.includes('Invalid login credentials') 
+        ? 'Invalid email or password. Please check your credentials and try again.' 
+        : (error.message || 'Failed to sign in')
+      setGeneralError(errMsg)
+      toast.error(errMsg)
     } finally {
       setLoading(false)
     }
@@ -74,6 +139,7 @@ const SignIn = () => {
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true)
+      setGeneralError('')
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -82,6 +148,7 @@ const SignIn = () => {
       })
       if (error) throw error
     } catch (error) {
+      setGeneralError(error.message || 'Google Sign-In failed')
       toast.error(error.message || 'Google Sign-In failed. Ensure Google Provider is enabled in Supabase.')
     } finally {
       setLoading(false)
@@ -93,7 +160,7 @@ const SignIn = () => {
   }
 
   return (
-    <div className="min-h-screen flex bg-white">
+    <div className="min-h-screen flex bg-white font-hanken">
       {/* Left Column - Image & Overlay */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-[#163422] flex-col justify-end p-12 overflow-hidden">
         <img
@@ -101,7 +168,7 @@ const SignIn = () => {
           alt="Spider"
           className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-transparent" />
         <div className="relative z-10 text-white max-w-lg mb-4">
           <h1 className="text-3xl lg:text-4xl font-libre font-bold mb-2 leading-tight">
             Curating Excellence
@@ -113,10 +180,10 @@ const SignIn = () => {
       </div>
 
       {/* Right Column - Form */}
-      <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 lg:px-20 py-12 bg-white">
+      <div className="w-full lg:w-1/2 flex flex-col justify-center px-4 sm:px-8 lg:px-20 py-8 sm:py-12 bg-white">
         <div className="max-w-md mx-auto w-full">
           {/* Logo */}
-          <div className="flex items-center gap-2 mb-8">
+          <div className="flex items-center gap-2 mb-6 sm:mb-8">
             <img src={TocoLogo} alt="Toco Logo" className="w-6 h-6 object-contain" />
             <span className="text-base font-sand font-semibold text-[#163422]">
               Toco's Arachnid
@@ -124,19 +191,29 @@ const SignIn = () => {
           </div>
 
           {/* Header */}
-          <h2 className="text-3xl lg:text-4xl font-libre font-bold text-[#163422] mb-1.5">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-libre font-bold text-[#163422] mb-1.5">
             Welcome Back
           </h2>
-          <p className="text-[#525B54] font-hanken text-xs mb-8">
+          <p className="text-[#525B54] font-hanken text-xs mb-6">
             Sign in to access your account and continue your journey.
           </p>
 
+          {/* General Banner Error */}
+          {generalError && (
+            <div className="mb-6 bg-red-50 border border-red-200 p-3.5 rounded-md flex items-start gap-2.5 text-red-700 animate-in fade-in duration-200">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <p className="text-xs font-hanken font-medium leading-relaxed">
+                {generalError}
+              </p>
+            </div>
+          )}
+
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {/* Email */}
             <div>
               <label className="block text-xs font-hanken font-medium text-[#525B54] mb-1.5">
-                Email Address
+                Email Address <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
@@ -144,15 +221,26 @@ const SignIn = () => {
                 placeholder="rayyan@example.com"
                 value={formData.email}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-[#E5E2DC] rounded-md font-hanken text-xs text-[#1C1B1B] focus:outline-none focus:border-[#163422] transition"
+                onBlur={handleBlur}
+                className={`w-full px-4 py-3 border rounded-md font-hanken text-xs text-[#1C1B1B] focus:outline-none transition ${
+                  touched.email && errors.email
+                    ? 'border-red-400 bg-red-50/20 focus:border-red-600 focus:ring-1 focus:ring-red-500'
+                    : 'border-[#E5E2DC] focus:border-[#163422]'
+                }`}
               />
+              {touched.email && errors.email && (
+                <p className="text-[11px] text-red-600 font-medium flex items-center gap-1 mt-1.5">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{errors.email}</span>
+                </p>
+              )}
             </div>
 
             {/* Password */}
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <label className="block text-xs font-hanken font-medium text-[#525B54]">
-                  Password
+                  Password <span className="text-red-500">*</span>
                 </label>
                 <button
                   type="button"
@@ -168,8 +256,19 @@ const SignIn = () => {
                 placeholder="••••••••••••"
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-[#E5E2DC] rounded-md font-hanken text-xs text-[#1C1B1B] focus:outline-none focus:border-[#163422] transition"
+                onBlur={handleBlur}
+                className={`w-full px-4 py-3 border rounded-md font-hanken text-xs text-[#1C1B1B] focus:outline-none transition ${
+                  touched.password && errors.password
+                    ? 'border-red-400 bg-red-50/20 focus:border-red-600 focus:ring-1 focus:ring-red-500'
+                    : 'border-[#E5E2DC] focus:border-[#163422]'
+                }`}
               />
+              {touched.password && errors.password && (
+                <p className="text-[11px] text-red-600 font-medium flex items-center gap-1 mt-1.5">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{errors.password}</span>
+                </p>
+              )}
             </div>
 
             {/* Sign In Button */}
@@ -184,9 +283,9 @@ const SignIn = () => {
 
           {/* Divider */}
           <div className="relative flex py-5 items-center">
-            <div className="flex-grow border-t border-[#E5E2DC]"></div>
-            <span className="flex-shrink mx-4 text-xs font-hanken text-[#6E756F]">Or continue with</span>
-            <div className="flex-grow border-t border-[#E5E2DC]"></div>
+            <div className="grow border-t border-[#E5E2DC]"></div>
+            <span className="shrink mx-4 text-xs font-hanken text-[#6E756F]">Or continue with</span>
+            <div className="grow border-t border-[#E5E2DC]"></div>
           </div>
 
           {/* Google Button */}
@@ -221,4 +320,3 @@ const SignIn = () => {
 }
 
 export default SignIn
-
