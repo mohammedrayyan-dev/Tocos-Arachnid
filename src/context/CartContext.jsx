@@ -38,6 +38,10 @@ export const CartProvider = ({ children }) => {
     }, 0)
 
     const addItem = async (productId, quantity = 1, productObj = null) => {
+        if (!user?.id) {
+            return false
+        }
+
         let targetProduct = productObj
         if (!targetProduct) {
             try {

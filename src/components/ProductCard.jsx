@@ -1,9 +1,10 @@
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import Button from "./common/Button"
 import beginnerTarantula from "../assets/image/beginner-tarantula-care.webp"
 import mexicanRedKnee from "../assets/image/mexican-red-knee.webp"
 import brazilianBlack from "../assets/image/brazilian-black.webp"
 import { useCart } from "../context/CartContext"
+import { useAuth } from "../context/AuthContext"
 import { toast } from "sonner"
 
 const ProductCard = ({ product, fromLabel }) => {
@@ -26,10 +27,19 @@ const ProductCard = ({ product, fromLabel }) => {
     const toSlug = (str) => (str ? String(str).toLowerCase().replace(/\s+/g, "-") : "")
 
   const { addItem } = useCart()
+  const { user } = useAuth()
+  const navigate = useNavigate()
 
   const handleAddToCart = (e) => {
     e.preventDefault()
     e.stopPropagation()
+
+    if (!user) {
+      toast.info("Please sign in to add items to your cart")
+      navigate("/signin")
+      return
+    }
+
     addItem(product.id, 1, product)
     toast.success(`${name} added to cart!`)
   }

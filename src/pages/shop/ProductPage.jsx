@@ -135,7 +135,7 @@ const ProductPage = () => {
   const handleAddToCart = async () => {
     if (!user) {
       toast.info("Please sign in to add items to your cart")
-      navigate("/sign-in", { state: { returnTo: location.pathname } })
+      navigate("/signin", { state: { returnTo: location.pathname } })
     } else {
       await addItem(product.id, qty)
       toast.success("Item added to cart!")
@@ -145,7 +145,7 @@ const ProductPage = () => {
   const handleBuyNow = async () => {
     if (!user) {
       toast.info("Please sign in to proceed with checkout")
-      navigate("/sign-in", { state: { returnTo: location.pathname } })
+      navigate("/signin", { state: { returnTo: location.pathname } })
     } else {
       await addItem(product.id, qty)
       navigate("/cart")
