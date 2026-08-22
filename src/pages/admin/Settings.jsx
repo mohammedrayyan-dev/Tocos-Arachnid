@@ -180,8 +180,12 @@ const Settings = () => {
                       name="upiId"
                       value={formData.upiId}
                       onChange={handleChange}
+                      placeholder="e.g. storename@okicici, 9876543210@ybl"
                       className="w-full bg-[#FAF8F5] border border-[#E5E2DC] rounded-md px-3.5 py-2.5 text-xs font-bold text-[#1C1B1B] focus:outline-none focus:border-[#163422]"
                     />
+                    <p className="text-[10px] text-[#6E756F] mt-1 font-medium">
+                      Must be a valid bank UPI VPA (e.g. <code className="font-mono">name@okicici</code>, <code className="font-mono">number@ybl</code>, <code className="font-mono">store@paytm</code>). Generic <code className="font-mono">@upi</code> handles fail in banking apps.
+                    </p>
                   </div>
 
                   <div>
@@ -193,8 +197,12 @@ const Settings = () => {
                       name="payeeName"
                       value={formData.payeeName}
                       onChange={handleChange}
+                      placeholder="e.g. Tocos Arachnid"
                       className="w-full bg-[#FAF8F5] border border-[#E5E2DC] rounded-md px-3.5 py-2.5 text-xs text-[#1C1B1B] focus:outline-none focus:border-[#163422]"
                     />
+                    <p className="text-[10px] text-[#6E756F] mt-1 font-medium">
+                      Merchant/Business name shown on customer payment screen (max 30 characters, plain letters/numbers).
+                    </p>
                   </div>
                 </div>
               </div>

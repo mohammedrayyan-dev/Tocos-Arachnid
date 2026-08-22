@@ -1,13 +1,15 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
+const envUpiId = import.meta.env.VITE_UPI_ID
+
 const DEFAULT_SETTINGS = {
   storeName: "Toco's Arachnid",
   supportEmail: "support@tocosarachnid.com",
   whatsappNumber: "+91 98765 43210",
   currency: "INR (₹)",
-  upiId: "tocosarachnids@upi",
-  payeeName: "Toco's Arachnid",
+  upiId: envUpiId || "9360435317@okbizaxis",
+  payeeName: "Tocos Arachnid",
   standardShippingFee: "150",
   expressShippingFee: "250",
   freeShippingThreshold: "5000",

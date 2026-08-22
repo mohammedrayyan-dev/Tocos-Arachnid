@@ -1,8 +1,9 @@
 import { supabase } from "./supabase";
 
 export const signUp = async (email, password, fullName = '') => {
+    const cleanEmail = (email || '').trim().toLowerCase()
     const { data, error } = await supabase.auth.signUp({
-        email,
+        email: cleanEmail,
         password,
         options: {
             data: {
@@ -18,7 +19,8 @@ export const signUp = async (email, password, fullName = '') => {
 export const signup = signUp
 
 export const signIn = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    const cleanEmail = (email || '').trim().toLowerCase()
+    const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password })
     if (error) throw error
     return data
 }

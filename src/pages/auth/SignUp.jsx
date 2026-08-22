@@ -7,7 +7,7 @@ import AuthBanner from "/src/assets/image/auth-banner.webp"
 import TermsModal from '../../components/modals/TermsModal'
 import EmailInboxModal from '../../components/modals/EmailInboxModal'
 import { supabase } from '../../lib/supabase'
-import { Mail, AlertCircle } from 'lucide-react'
+import { Mail, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -20,9 +20,14 @@ const SignUp = () => {
   const [showTermsModal, setShowTermsModal] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [generalError, setGeneralError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   
   // Verification Step state: 'signup' | 'verify'
   const [step, setStep] = useState('signup')
+  
+  // Ref to preserve auth user and password across step transitions
+  const createdUserRef = useRef(null)
+  const savedPasswordRef = useRef('')
   
   // Generated 6-digit verification code
   const [verificationCode, setVerificationCode] = useState('849201')
@@ -157,6 +162,8 @@ const SignUp = () => {
       // 1. Attempt Supabase Auth Sign Up
       const res = await signUp(cleanEmail, formData.password, cleanName)
       const createdUser = res?.user || res?.data?.user
+      if (createdUser) createdUserRef.current = createdUser
+      savedPasswordRef.current = formData.password
 
       // Check if user is already registered in Supabase auth.users
       const isAlreadyRegistered = createdUser && createdUser.identities && createdUser.identities.length === 0
@@ -312,26 +319,38 @@ const SignUp = () => {
 
   // Complete registration & set active session on successful code verification
   const completeRegistrationSession = async (cleanEmail, cleanName, existingUser = null) => {
-    let activeUser = existingUser
+    let activeUser = existingUser || createdUserRef.current
+    const passwordToUse = savedPasswordRef.current || formData.password
 
-    if (!activeUser) {
+    // 1. Attempt to sign in with password to get real Supabase session token
+    if (passwordToUse) {
       try {
         const signRes = await supabase.auth.signInWithPassword({
           email: cleanEmail,
-          password: formData.password
+          password: passwordToUse
         })
         if (signRes?.data?.user) activeUser = signRes.data.user
-      } catch (e) {}
-    }
-
-    if (!activeUser) {
-      activeUser = {
-        id: `usr_${Date.now()}`,
-        email: cleanEmail,
-        user_metadata: { full_name: cleanName, name: cleanName, role: 'customer' }
+      } catch (e) {
+        console.warn("Auto sign-in attempt notice:", e)
       }
     }
 
+    // 2. If still no active user, check active session from Supabase
+    if (!activeUser) {
+      try {
+        const { data: curData } = await supabase.auth.getUser()
+        if (curData?.user) activeUser = curData.user
+      } catch (e) {}
+    }
+
+    // 3. Fallback check: if email confirmation is required by Supabase server
+    if (!activeUser || !activeUser.id || activeUser.id.startsWith('usr_')) {
+      toast.success('Registration successful! Please check your email or sign in to continue.')
+      navigate('/sign-in', { state: { email: cleanEmail } })
+      return
+    }
+
+    // 4. Create/Upsert database profile record with real Supabase user ID
     try {
       await supabase.from('profiles').upsert([
         {
@@ -522,19 +541,33 @@ const SignUp = () => {
                   <label className="block text-xs font-hanken font-medium text-[#525B54] mb-1.5">
                     Password <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="password"
-                    name="password"
-                    placeholder="•••••••••••• (min 6 characters)"
-                    value={formData.password}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    className={`w-full px-4 py-3 border rounded-md font-hanken text-xs text-[#1C1B1B] focus:outline-none transition ${
-                      touched.password && errors.password
-                        ? 'border-red-400 bg-red-50/20 focus:border-red-600 focus:ring-1 focus:ring-red-500'
-                        : 'border-[#E5E2DC] focus:border-[#163422]'
-                    }`}
-                  />
+                  <div className="relative flex items-center">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      placeholder="•••••••••••• (min 6 characters)"
+                      value={formData.password}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className={`w-full pl-4 pr-10 py-3 border rounded-md font-hanken text-xs text-[#1C1B1B] focus:outline-none transition ${
+                        touched.password && errors.password
+                          ? 'border-red-400 bg-red-50/20 focus:border-red-600 focus:ring-1 focus:ring-red-500'
+                          : 'border-[#E5E2DC] focus:border-[#163422]'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 text-[#6E756F] hover:text-[#163422] focus:outline-none transition cursor-pointer p-1"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
                   {touched.password && errors.password ? (
                     <p className="text-[11px] text-red-600 font-medium flex items-center gap-1 mt-1.5">
                       <AlertCircle className="w-3 h-3 shrink-0" />

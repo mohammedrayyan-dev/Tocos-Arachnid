@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../context/AuthContext"
+import { Eye, EyeOff } from "lucide-react"
 
 const standards = [
   "Minimum 6 characters",
@@ -18,6 +19,8 @@ const ResetPassword = () => {
   const { user } = useAuth()
 
   const [loading, setLoading] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   // Strict session security verification
   useEffect(() => {
@@ -100,24 +103,52 @@ const ResetPassword = () => {
                 <label className="font-hanken font-semibold text-xs text-[#525B54] uppercase tracking-wider">
                   New Password
                 </label>
-                <input
-                  name="newPassword"
-                  type="password"
-                  placeholder="••••••••••••"
-                  className="font-hanken text-sm text-[#1C1B1B] p-3 border border-[#E5E2DC] rounded-md focus:outline-none focus:border-[#163422]"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    name="newPassword"
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="••••••••••••"
+                    className="w-full font-hanken text-sm text-[#1C1B1B] pl-3 pr-10 py-3 border border-[#E5E2DC] rounded-md focus:outline-none focus:border-[#163422]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 text-[#6E756F] hover:text-[#163422] focus:outline-none transition cursor-pointer p-1"
+                    aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col w-full gap-1.5">
                 <label className="font-hanken font-semibold text-xs text-[#525B54] uppercase tracking-wider">
                   Confirm Password
                 </label>
-                <input
-                  name="confirmPassword"
-                  type="password"
-                  placeholder="••••••••••••"
-                  className="font-hanken text-sm text-[#1C1B1B] p-3 border border-[#E5E2DC] rounded-md focus:outline-none focus:border-[#163422]"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    name="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="••••••••••••"
+                    className="w-full font-hanken text-sm text-[#1C1B1B] pl-3 pr-10 py-3 border border-[#E5E2DC] rounded-md focus:outline-none focus:border-[#163422]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 text-[#6E756F] hover:text-[#163422] focus:outline-none transition cursor-pointer p-1"
+                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="bg-[#FAF8F5] border-l-2 border-[#163422] p-4 flex flex-col gap-1.5 rounded-r-md">

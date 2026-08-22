@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { toast } from 'sonner'
 import AuthBanner from "/src/assets/image/auth-banner.webp"
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -16,6 +16,7 @@ const SignIn = () => {
   const { user, isAdmin, setSessionUser } = useAuth()
   const [loading, setLoading] = useState(false)
   const [generalError, setGeneralError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     email: location.state?.email || '',
     password: ''
@@ -126,9 +127,13 @@ const SignIn = () => {
       }
     } catch (error) {
       console.error('Sign-in error:', error)
-      const errMsg = error.message?.includes('Invalid login credentials') 
-        ? 'Invalid email or password. Please check your credentials and try again.' 
-        : (error.message || 'Failed to sign in')
+      let errMsg = error.message || 'Failed to sign in'
+      const lowerErr = (error.message || '').toLowerCase()
+      if (lowerErr.includes('invalid login credentials')) {
+        errMsg = 'Invalid email or password. If you registered via Google ("Continue with Google"), please sign in using Google.'
+      } else if (lowerErr.includes('email not confirmed')) {
+        errMsg = 'Your email address is not confirmed yet. Please check your inbox for the confirmation email.'
+      }
       setGeneralError(errMsg)
       toast.error(errMsg)
     } finally {
@@ -250,19 +255,33 @@ const SignIn = () => {
                   Forgot password?
                 </button>
               </div>
-              <input
-                type="password"
-                name="password"
-                placeholder="••••••••••••"
-                value={formData.password}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                className={`w-full px-4 py-3 border rounded-md font-hanken text-xs text-[#1C1B1B] focus:outline-none transition ${
-                  touched.password && errors.password
-                    ? 'border-red-400 bg-red-50/20 focus:border-red-600 focus:ring-1 focus:ring-red-500'
-                    : 'border-[#E5E2DC] focus:border-[#163422]'
-                }`}
-              />
+              <div className="relative flex items-center">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="••••••••••••"
+                  value={formData.password}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  className={`w-full pl-4 pr-10 py-3 border rounded-md font-hanken text-xs text-[#1C1B1B] focus:outline-none transition ${
+                    touched.password && errors.password
+                      ? 'border-red-400 bg-red-50/20 focus:border-red-600 focus:ring-1 focus:ring-red-500'
+                      : 'border-[#E5E2DC] focus:border-[#163422]'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 text-[#6E756F] hover:text-[#163422] focus:outline-none transition cursor-pointer p-1"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
               {touched.password && errors.password && (
                 <p className="text-[11px] text-red-600 font-medium flex items-center gap-1 mt-1.5">
                   <AlertCircle className="w-3 h-3 shrink-0" />

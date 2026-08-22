@@ -56,8 +56,10 @@ const QRPayment = () => {
     const { user } = useAuth()
     const { settings } = useStoreSettings()
 
-    const activeUpiId = settings.upiId || "tocosarachnids@upi"
-    const activePayeeName = settings.payeeName || settings.storeName || "Toco's Arachnids"
+    const envUpiId = import.meta.env.VITE_UPI_ID
+    const rawUpiId = envUpiId || settings.upiId || "9360435317@okbizaxis"
+    const activeUpiId = rawUpiId.trim()
+    const activePayeeName = (settings.payeeName || settings.storeName || "Tocos Arachnid").trim()
     
     // Initial 5-minute timer (300 seconds)
     const [timeLeft, setTimeLeft] = useState(300)
@@ -80,8 +82,18 @@ const QRPayment = () => {
         items: rawOrderData.items || []
     })
 
-    // Construct standard scannable UPI payment link from active settings
-    const upiPaymentUrl = `upi://pay?pa=${encodeURIComponent(activeUpiId)}&pn=${encodeURIComponent(activePayeeName)}&am=${calculatedNumeric}&tn=${encodeURIComponent(`Order ${orderData.orderId}`)}&cu=INR`
+    // Clean payee name and order ID for NPCI UPI URI specification compliance:
+    // 1. Remove special characters (apostrophes, quotes) from payee name and limit length to 30 chars
+    const cleanPayeeName = activePayeeName.replace(/['"&#]/g, '').trim().slice(0, 30) || 'Tocos Arachnid'
+
+    // 2. Remove '#' symbol from orderId (NPCI specification forbids '#' or URL-unsafe symbols in transaction notes)
+    const cleanOrderId = String(orderData.orderId || '').replace(/#/g, '').trim()
+
+    // 3. Format numeric total strictly as 2 decimal places (e.g. 210.00)
+    const formattedAmount = Number(calculatedNumeric || 0).toFixed(2)
+
+    // 4. Construct standard scannable UPI payment link
+    const upiPaymentUrl = `upi://pay?pa=${encodeURIComponent(activeUpiId)}&pn=${encodeURIComponent(cleanPayeeName)}&am=${formattedAmount}&tn=${encodeURIComponent(`Order ${cleanOrderId}`)}&cu=INR`
 
     useEffect(() => {
         if (timeLeft <= 0) {
@@ -264,9 +276,20 @@ const QRPayment = () => {
                             <span className="font-hanken text-[11px] font-bold uppercase tracking-[0.24em] text-[#91724B]">
                                 SECURE TERMINAL
                             </span>
-                            <h3 className="font-libre text-2xl font-bold text-[#163422] mt-1.5 mb-6">
+                            <h3 className="font-libre text-2xl font-bold text-[#163422] mt-1.5 mb-4">
                                 Scan to Pay
                             </h3>
+
+                            {activeUpiId.toLowerCase().endsWith('@upi') && (
+                                <div className="w-full mb-4 bg-amber-50 border border-amber-200 rounded-md p-3 text-[11px] text-amber-900 leading-snug">
+                                    <p className="font-bold flex items-center gap-1 text-amber-800">
+                                        <span>⚠️ Demo VPA Notice</span>
+                                    </p>
+                                    <p className="mt-1">
+                                        "<code className="font-mono font-semibold">{activeUpiId}</code>" is a placeholder handle. Generic <code className="font-mono">@upi</code> IDs are rejected by UPI apps (GPay / PhonePe). Please set your actual bank UPI ID (e.g., <code className="font-mono">store@okicici</code> or <code className="font-mono">number@ybl</code>) in <strong>Admin &gt; Settings</strong>.
+                                    </p>
+                                </div>
+                            )}
 
                             {/* QR Frame with L-shaped corner brackets & dynamic blur on expire */}
                             <div 
