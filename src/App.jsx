@@ -59,7 +59,9 @@ function App() {
       <Route path="/reset-password" element={<ProtectedRoute><ResetPassword /></ProtectedRoute>} />
       <Route path="/reset-password/success" element={<ResetSuccess />} />
       <Route path="/sign-up" element={<SignUp />} />
+      <Route path="/signup" element={<SignUp />} />
       <Route path="/sign-in" element={<SignIn />} />
+      <Route path="/signin" element={<SignIn />} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
       <Route path="/admin/inventory" element={<ProtectedRoute requireAdmin><Inventory /></ProtectedRoute>} />
