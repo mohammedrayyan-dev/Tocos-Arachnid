@@ -1,13 +1,13 @@
-const filterConfig = [
+const DEFAULT_FILTER_CONFIG = [
   {
     key: "species",
-    label: "SPECIES",
+    label: "SPECIES / RESIDENCE",
     options: ["All Species", "Terrestrial", "Arboreal", "Fossorial"]
   },
   {
     key: "priceRange",
     label: "PRICE RANGE",
-    options: ["All Prices", "Under ₹1,000", "₹1,000 - ₹3,000", "₹3,000 - ₹5,000", "Over ₹5,000"]
+    options: ["All Prices", "Under ₹5,000", "₹5,000 - ₹15,000", "₹15,000 - ₹25,000", "Over ₹25,000"]
   },
   {
     key: "temperament",
@@ -27,13 +27,15 @@ const sortConfig = {
   options: ["Newest Arrivals", "Price: Low to High", "Price: High to Low", "Name: A to Z"]
 }
 
-const FilterBar = ({ selected = {}, onSelect }) => {
+const FilterBar = ({ selected = {}, onSelect, filters = DEFAULT_FILTER_CONFIG }) => {
+  const activeFilters = filters || DEFAULT_FILTER_CONFIG
+
   return (
     <div className="bg-[#F4F2EE] border border-[#E3E0DA] rounded-md p-5 lg:p-6 mb-8 w-full shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-6">
       
       {/* Left Filter Options */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:flex lg:flex-wrap items-center gap-4 lg:gap-6 w-full lg:w-auto">
-        {filterConfig.map((f) => (
+        {activeFilters.map((f) => (
           <div key={f.key} className="flex flex-col gap-1.5 w-full sm:w-auto min-w-0">
             <label className="font-hanken text-[10px] font-bold text-[#6E756F] uppercase tracking-[0.18em]">
               {f.label}

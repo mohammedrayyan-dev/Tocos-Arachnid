@@ -68,12 +68,15 @@ const Orders = () => {
 
     // 3. Auto-sync missing local orders to Supabase DB
     const dbOrderIds = new Set(dbOrders.map(o => String(o.id || o.order_id || o.orderId)))
-    const unsyncedLocal = localAdminOrders.filter(o => o && o.id && o.user_id && !dbOrderIds.has(String(o.id)))
+    const unsyncedLocal = localAdminOrders.filter(o => o && o.id && !dbOrderIds.has(String(o.id)))
 
     if (unsyncedLocal.length > 0) {
       try {
         const payloadToSync = unsyncedLocal.map(o => ({
-          user_id: o.user_id,
+          id: o.id,
+          user_id: o.user_id || null,
+          email: o.email || 'customer@tocos.com',
+          customer_name: o.customer_name || o.shipping_name || o.recipient || 'Customer',
           shipping_name: o.shipping_name || o.customer_name || o.recipient || 'Customer',
           phone_number: o.phone_number || o.customer_phone || '9876543210',
           shipping_address: o.shipping_address || o.address || 'Address on file',
@@ -82,12 +85,31 @@ const Orders = () => {
           shipping_zip: o.shipping_zip || o.zip || '560001',
           shipping_landmark: o.shipping_landmark || 'Near Center',
           total_amount: o.total_amount || o.rawTotalAmount || 0,
-          status: o.status || 'Pending'
+          items: o.items || [],
+          utr_number: o.utr_number || o.utrNumber || o.utr || '',
+          status: o.status || 'Pending',
+          created_at: o.created_at || new Date().toISOString()
         }))
 
         const { error: syncErr } = await supabase.from('orders').insert(payloadToSync)
-        if (syncErr) console.warn('Auto sync local to DB notice:', syncErr.message)
-        else console.log('Successfully synced local orders to Supabase DB!')
+        if (syncErr) {
+          // Fallback insert if DB table schema has fewer columns
+          const fallbackPayload = payloadToSync.map(p => ({
+            user_id: p.user_id,
+            shipping_name: p.shipping_name,
+            phone_number: p.phone_number,
+            shipping_address: p.shipping_address,
+            shipping_city: p.shipping_city,
+            shipping_state: p.shipping_state,
+            shipping_zip: p.shipping_zip,
+            shipping_landmark: p.shipping_landmark,
+            total_amount: p.total_amount,
+            status: p.status
+          }))
+          await supabase.from('orders').insert(fallbackPayload)
+        } else {
+          console.log('Successfully synced local orders to Supabase DB!')
+        }
       } catch (e) {
         console.warn('Auto sync local to DB exception:', e)
       }

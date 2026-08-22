@@ -71,16 +71,34 @@ const OrderHistory = () => {
       setLoading(true)
       let dbOrders = []
 
-      // 1. Fetch from Supabase Database
+      // 1. Fetch from Supabase Database (Query by user_id OR email for 100% persistence)
       if (user?.id || user?.email) {
         try {
-          let query = supabase.from('orders').select('*').order('created_at', { ascending: false })
-          if (user?.id) {
-            query = query.eq('user_id', user.id)
+          let data = null
+          if (user?.id && user?.email) {
+            const { data: res } = await supabase
+              .from('orders')
+              .select('*')
+              .or(`user_id.eq.${user.id},email.ilike.${user.email}`)
+              .order('created_at', { ascending: false })
+            data = res
+          } else if (user?.id) {
+            const { data: res } = await supabase
+              .from('orders')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+            data = res
+          } else if (user?.email) {
+            const { data: res } = await supabase
+              .from('orders')
+              .select('*')
+              .ilike('email', user.email)
+              .order('created_at', { ascending: false })
+            data = res
           }
 
-          const { data, error } = await query
-          if (!error && data) {
+          if (data && Array.isArray(data)) {
             dbOrders = data
           }
         } catch (e) {

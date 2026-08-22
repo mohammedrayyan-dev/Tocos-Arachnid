@@ -87,63 +87,54 @@ const Profile = () => {
 
   const handleEditPersonalDetails = async (formData) => {
     try {
-      if (user?.id) {
-        // 1. Immediately cache updated profile locally for 0ms instant persistence
+      if (user?.id || user?.email) {
+        const cleanName = formData.fullName?.trim() || ''
+        const cleanPhone = formData.phone?.trim() || ''
+
+        // 1. Instantly cache updated profile locally
         try {
-          const profileCacheKey = `tocos_user_profile_${user.id}`
+          const profileCacheKey = `tocos_user_profile_${user.id || user.email}`
           localStorage.setItem(profileCacheKey, JSON.stringify({
-            full_name: formData.fullName,
-            phone: formData.phone,
+            full_name: cleanName,
+            phone: cleanPhone,
             email: user.email
           }))
         } catch (e) {}
 
-        // 2. Update Supabase public.profiles table
+        // 2. Primary: Upsert Supabase public.profiles DB table
         try {
-          const { error: updateErr } = await supabase
+          await supabase
             .from('profiles')
-            .update({
-              full_name: formData.fullName,
-              phone: formData.phone
-            })
-            .eq('id', user.id)
-
-          if (updateErr) {
-            console.warn("Profiles table update notice:", updateErr.message)
-            // Fallback to upsert
-            await supabase
-              .from('profiles')
-              .upsert({
-                id: user.id,
-                email: user.email,
-                full_name: formData.fullName,
-                phone: formData.phone
-              }, { onConflict: 'id' })
-          }
+            .upsert({
+              id: user.id,
+              email: user.email,
+              full_name: cleanName,
+              phone: cleanPhone
+            }, { onConflict: 'id' })
         } catch (dbErr) {
-          console.warn("Profiles DB update exception:", dbErr)
+          console.warn("Profiles DB upsert exception:", dbErr)
         }
 
-        // 3. Update Supabase Auth user metadata
+        // 3. Secondary: Update Supabase Auth user metadata
         try {
           await supabase.auth.updateUser({
             data: {
-              full_name: formData.fullName,
-              name: formData.fullName,
-              phone: formData.phone
+              full_name: cleanName,
+              name: cleanName,
+              phone: cleanPhone
             }
           })
         } catch (authErr) {}
 
-        // 4. Instantly update active React user session state
+        // 4. Update active React user session state
         const updatedUser = {
           ...user,
-          phone: formData.phone,
+          phone: cleanPhone,
           user_metadata: {
             ...(user.user_metadata || {}),
-            full_name: formData.fullName,
-            name: formData.fullName,
-            phone: formData.phone
+            full_name: cleanName,
+            name: cleanName,
+            phone: cleanPhone
           }
         }
 

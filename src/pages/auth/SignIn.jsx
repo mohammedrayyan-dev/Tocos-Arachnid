@@ -205,11 +205,32 @@ const SignIn = () => {
 
           {/* General Banner Error */}
           {generalError && (
-            <div className="mb-6 bg-red-50 border border-red-200 p-3.5 rounded-md flex items-start gap-2.5 text-red-700 animate-in fade-in duration-200">
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-              <p className="text-xs font-hanken font-medium leading-relaxed">
-                {generalError}
-              </p>
+            <div className="mb-6 bg-red-50 border border-red-200 p-4 rounded-md flex flex-col gap-2 text-red-700 animate-in fade-in duration-200">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <p className="text-xs font-hanken font-medium leading-relaxed">
+                  {generalError}
+                </p>
+              </div>
+              {generalError.includes('Google') && (
+                <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-red-200/80 mt-1">
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    className="text-xs font-bold text-[#163422] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <span>👉 Sign in with Google now</span>
+                  </button>
+                  <span className="text-xs text-red-300">•</span>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                  >
+                    Set a password for email login
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

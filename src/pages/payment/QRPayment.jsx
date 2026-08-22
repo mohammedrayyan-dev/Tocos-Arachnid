@@ -187,11 +187,35 @@ const QRPayment = () => {
                 } catch (e) {}
             }
 
-            // 3. Insert into Supabase DB with exact schema requirements
-            if (activeUser?.id) {
-                try {
-                    const dbPayload = {
-                        user_id: activeUser.id,
+            // 3. Insert into Supabase DB table for permanent cross-device persistence
+            try {
+                const dbPayload = {
+                    id: orderData.orderId,
+                    user_id: activeUser?.id || null,
+                    email: activeUser?.email || 'customer@tocos.com',
+                    customer_name: cleanRecipient || 'Customer',
+                    shipping_name: cleanRecipient || 'Customer',
+                    phone_number: cleanPhone || '9876543210',
+                    customer_phone: cleanPhone || '9876543210',
+                    shipping_address: orderData.shippingDetails?.shipping_address || 'Address on file',
+                    shipping_city: orderData.shippingDetails?.city_state || 'Bengaluru',
+                    shipping_state: orderData.shippingDetails?.state || 'Karnataka',
+                    shipping_zip: orderData.shippingDetails?.postal_code || '560001',
+                    shipping_landmark: orderData.shippingDetails?.landmark || 'Near Center',
+                    total_amount: calculatedNumeric,
+                    items: orderData.items || [],
+                    utr_number: cleanUtr,
+                    status: 'Pending',
+                    created_at: new Date().toISOString()
+                }
+
+                // First attempt full payload insert
+                const { error: fullErr } = await supabase.from('orders').insert([dbPayload])
+                if (fullErr) {
+                    console.warn("Supabase full insert notice, trying fallback payload:", fullErr.message)
+                    // Fallback insert if custom columns differ in schema
+                    const fallbackPayload = {
+                        user_id: activeUser?.id || null,
                         shipping_name: cleanRecipient || 'Customer',
                         phone_number: cleanPhone || '9876543210',
                         shipping_address: orderData.shippingDetails?.shipping_address || 'Address on file',
@@ -202,13 +226,12 @@ const QRPayment = () => {
                         total_amount: calculatedNumeric,
                         status: 'Pending'
                     }
-
-                    const { error } = await supabase.from('orders').insert([dbPayload])
-                    if (error) console.warn("Supabase order insert notice:", error.message)
-                    else console.log("Successfully inserted order to Supabase DB!")
-                } catch (dbErr) {
-                    console.warn("Supabase insert exception:", dbErr)
+                    await supabase.from('orders').insert([fallbackPayload])
+                } else {
+                    console.log("Successfully inserted complete order payload to Supabase DB!")
                 }
+            } catch (dbErr) {
+                console.warn("Supabase order insert exception:", dbErr)
             }
 
             if (clearCart) clearCart()

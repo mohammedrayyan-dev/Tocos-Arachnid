@@ -28,28 +28,35 @@ const AllProductPage = () => {
       const matchSpecies =
         !selected.species ||
         selected.species === "All Species" ||
+        selected.species === "All" ||
         p.residence?.toLowerCase() === selected.species.toLowerCase() ||
-        p.sub_category?.toLowerCase() === selected.species.toLowerCase()
+        p.sub_category?.toLowerCase() === selected.species.toLowerCase() ||
+        p.origin_tag?.toLowerCase() === selected.species.toLowerCase() ||
+        p.category?.toLowerCase() === selected.species.toLowerCase() ||
+        p.name?.toLowerCase().includes(selected.species.toLowerCase())
 
       // 2. Price Range filter
+      const numericPrice = Number(p.price) || 0
       let matchPrice = true
-      if (selected.priceRange === "Under ₹1,000") matchPrice = p.price < 1000
-      else if (selected.priceRange === "₹1,000 - ₹3,000") matchPrice = p.price >= 1000 && p.price <= 3000
-      else if (selected.priceRange === "₹3,000 - ₹5,000") matchPrice = p.price >= 3000 && p.price <= 5000
-      else if (selected.priceRange === "Over ₹5,000") matchPrice = p.price > 5000
+      if (selected.priceRange === "Under ₹5,000" || selected.priceRange === "Under ₹1,000") matchPrice = numericPrice < 5000
+      else if (selected.priceRange === "₹5,000 - ₹15,000" || selected.priceRange === "₹1,000 - ₹3,000") matchPrice = numericPrice >= 5000 && numericPrice <= 15000
+      else if (selected.priceRange === "₹15,000 - ₹25,000" || selected.priceRange === "₹3,000 - ₹5,000") matchPrice = numericPrice >= 15000 && numericPrice <= 25000
+      else if (selected.priceRange === "Over ₹25,000" || selected.priceRange === "Over ₹5,000") matchPrice = numericPrice > 25000
 
       // 3. Temperament filter
       const matchTemperament =
         !selected.temperament ||
         selected.temperament === "Any" ||
-        p.temperament?.toLowerCase() === selected.temperament.toLowerCase()
+        p.temperament?.toLowerCase() === selected.temperament.toLowerCase() ||
+        (p.temperament && p.temperament.toLowerCase().includes(selected.temperament.toLowerCase()))
 
       // 4. Care Level filter
       const matchCareLevel =
         !selected.careLevel ||
         selected.careLevel === "All Levels" ||
-        p.care_level?.toLowerCase()?.includes(selected.careLevel.toLowerCase()) ||
-        (selected.careLevel === "Beginner" && (p.care_level?.toLowerCase().includes("beginner") || !p.care_level))
+        (selected.careLevel === "Beginner" && (p.care_level?.toLowerCase().includes("beginner") || !p.care_level)) ||
+        (selected.careLevel === "Intermediate" && (p.care_level?.toLowerCase().includes("intermediate") || p.care_level?.toLowerCase().includes("collector"))) ||
+        (selected.careLevel === "Advanced" && (p.care_level?.toLowerCase().includes("collector") || p.care_level?.toLowerCase().includes("advanced") || p.care_level?.toLowerCase().includes("expert")))
 
       return matchSpecies && matchPrice && matchTemperament && matchCareLevel
     })

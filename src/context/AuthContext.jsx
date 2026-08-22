@@ -95,15 +95,21 @@ export const AuthProvider = ({ children }) => {
             roleCache.current.delete(sessionUser.id)
         }
 
-        // Hydrate authoritative full_name, phone, avatar, role from public.profiles DB table
+        // Hydrate authoritative full_name, phone, avatar_url, role from public.profiles DB table (Primary Source of Truth)
         let dbProfile = null
         try {
-            const { data } = await supabase
-                .from('profiles')
-                .select('full_name, phone, avatar_url, role')
-                .eq('id', sessionUser.id)
-                .maybeSingle()
-            if (data) dbProfile = data
+            if (sessionUser?.id || sessionUser?.email) {
+                let query = supabase.from('profiles').select('*')
+                if (sessionUser.id && sessionUser.email) {
+                    query = query.or(`id.eq.${sessionUser.id},email.ilike.${sessionUser.email}`)
+                } else if (sessionUser.id) {
+                    query = query.eq('id', sessionUser.id)
+                } else if (sessionUser.email) {
+                    query = query.ilike('email', sessionUser.email)
+                }
+                const { data } = await query.maybeSingle()
+                if (data) dbProfile = data
+            }
         } catch (e) {}
 
         let localProfile = null
@@ -114,8 +120,10 @@ export const AuthProvider = ({ children }) => {
 
         const storedAvatar = localStorage.getItem('user_avatar_custom')
         const avatar = storedAvatar || dbProfile?.avatar_url || sessionUser.user_metadata?.avatar_url || DEFAULT_INDIAN_MALE_AVATAR
-        const fullName = localProfile?.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || dbProfile?.full_name || (sessionUser.email ? sessionUser.email.split('@')[0] : '')
-        const phone = localProfile?.phone || sessionUser.user_metadata?.phone || sessionUser.phone || dbProfile?.phone || ''
+        
+        // DB profile fields take HIGHEST precedence for permanent persistence
+        const fullName = dbProfile?.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || localProfile?.full_name || (sessionUser.email ? sessionUser.email.split('@')[0] : '')
+        const phone = dbProfile?.phone || sessionUser.user_metadata?.phone || sessionUser.phone || localProfile?.phone || ''
         const userRole = dbProfile?.role || sessionUser.user_metadata?.role || sessionUser.app_metadata?.role || 'customer'
 
         const userWithMetadata = {
@@ -132,7 +140,7 @@ export const AuthProvider = ({ children }) => {
             }
         }
 
-        // Optimistically set user state immediately
+        // Set user state immediately with DB-hydrated authoritative data
         setUser(userWithMetadata)
 
         activeUserIdRef.current = sessionUser.id
