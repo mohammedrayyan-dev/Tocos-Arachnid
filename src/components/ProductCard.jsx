@@ -60,7 +60,9 @@ const ProductCard = ({ product, fromLabel }) => {
     <div className="relative w-full aspect-square bg-[#FAF8F5] overflow-hidden">
         <img 
             src={imageSrc} 
-            alt={name} 
+            alt={name || "Product specimen"} 
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
             onError={(e) => {
                 const nameLower = String(name || '').toLowerCase()

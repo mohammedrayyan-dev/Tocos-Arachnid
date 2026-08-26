@@ -485,7 +485,9 @@ const Cart = () => {
                             >
                                 <img 
                                     src={i.products?.thumbnail || i.products?.image} 
-                                    alt={i.products?.name} 
+                                    alt={i.products?.name || "Cart Specimen"} 
+                                    loading="lazy"
+                                    decoding="async"
                                     className="w-full h-full object-cover"
                                     onError={(e) => {
                                         e.currentTarget.src = beginnerTarantula

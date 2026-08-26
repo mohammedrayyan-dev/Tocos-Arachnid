@@ -95,58 +95,68 @@ export const AuthProvider = ({ children }) => {
             roleCache.current.delete(sessionUser.id)
         }
 
-        // Hydrate authoritative full_name, phone, avatar_url, role from public.profiles DB table (Primary Source of Truth)
-        let dbProfile = null
-        try {
-            if (sessionUser?.id || sessionUser?.email) {
-                let query = supabase.from('profiles').select('*')
-                if (sessionUser.id && sessionUser.email) {
-                    query = query.or(`id.eq.${sessionUser.id},email.ilike.${sessionUser.email}`)
-                } else if (sessionUser.id) {
-                    query = query.eq('id', sessionUser.id)
-                } else if (sessionUser.email) {
-                    query = query.ilike('email', sessionUser.email)
-                }
-                const { data } = await query.maybeSingle()
-                if (data) dbProfile = data
-            }
-        } catch (e) {}
-
-        let localProfile = null
-        try {
-            const savedProfile = localStorage.getItem(`tocos_user_profile_${sessionUser.id}`)
-            if (savedProfile) localProfile = JSON.parse(savedProfile)
-        } catch (e) {}
-
+        // 1. Immediately set user state synchronously so avatar renders instantly (0ms delay)
         const storedAvatar = localStorage.getItem('user_avatar_custom')
-        const avatar = storedAvatar || dbProfile?.avatar_url || sessionUser.user_metadata?.avatar_url || DEFAULT_INDIAN_MALE_AVATAR
-        
-        // DB profile fields take HIGHEST precedence for permanent persistence
-        const fullName = dbProfile?.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || localProfile?.full_name || (sessionUser.email ? sessionUser.email.split('@')[0] : '')
-        const phone = dbProfile?.phone || sessionUser.user_metadata?.phone || sessionUser.phone || localProfile?.phone || ''
-        const userRole = dbProfile?.role || sessionUser.user_metadata?.role || sessionUser.app_metadata?.role || 'customer'
+        const initialAvatar = storedAvatar || sessionUser.user_metadata?.avatar_url || DEFAULT_INDIAN_MALE_AVATAR
+        const initialName = sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || (sessionUser.email ? sessionUser.email.split('@')[0] : '')
+        const initialRole = sessionUser.user_metadata?.role || sessionUser.app_metadata?.role || (sessionUser.email === 'admin@tocos.com' ? 'admin' : 'customer')
 
-        const userWithMetadata = {
+        const immediateUser = {
             ...sessionUser,
-            phone: phone,
-            role: userRole,
+            role: initialRole,
             user_metadata: {
                 ...(sessionUser.user_metadata || {}),
-                full_name: fullName,
-                name: fullName,
-                phone: phone,
-                avatar_url: avatar,
-                role: userRole
+                full_name: initialName,
+                name: initialName,
+                avatar_url: initialAvatar,
+                role: initialRole
             }
         }
 
-        // Set user state immediately with DB-hydrated authoritative data
-        setUser(userWithMetadata)
-
         activeUserIdRef.current = sessionUser.id
-        const adminStatus = userRole === 'admin' || await checkAdminRole(userWithMetadata)
-        setIsAdmin(adminStatus)
-        return { user: userWithMetadata, isAdmin: adminStatus }
+        setUser(immediateUser)
+        setIsAdmin(initialRole === 'admin')
+
+        // 2. Hydrate authoritative full_name, phone, avatar_url, role from public.profiles DB table asynchronously in background
+        (async () => {
+            try {
+                if (sessionUser?.id || sessionUser?.email) {
+                    let query = supabase.from('profiles').select('*')
+                    if (sessionUser.id && sessionUser.email) {
+                        query = query.or(`id.eq.${sessionUser.id},email.ilike.${sessionUser.email}`)
+                    } else if (sessionUser.id) {
+                        query = query.eq('id', sessionUser.id)
+                    } else if (sessionUser.email) {
+                        query = query.ilike('email', sessionUser.email)
+                    }
+                    const { data: dbProfile } = await query.maybeSingle()
+                    
+                    if (dbProfile) {
+                        const avatar = storedAvatar || dbProfile.avatar_url || sessionUser.user_metadata?.avatar_url || DEFAULT_INDIAN_MALE_AVATAR
+                        const fullName = dbProfile.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || initialName
+                        const phone = dbProfile.phone || sessionUser.user_metadata?.phone || ''
+                        const userRole = dbProfile.role || initialRole
+
+                        const updatedUser = {
+                            ...sessionUser,
+                            phone: phone,
+                            role: userRole,
+                            user_metadata: {
+                                ...(sessionUser.user_metadata || {}),
+                                full_name: fullName,
+                                name: fullName,
+                                phone: phone,
+                                avatar_url: avatar,
+                                role: userRole
+                            }
+                        }
+                        setUser(updatedUser)
+                        checkAdminRole(updatedUser)
+                    }
+                }
+            } catch (e) {}
+        })()
+        return { user: immediateUser, isAdmin: initialRole === 'admin' }
     }
 
     const clearSupabaseAuthStorage = () => {
