@@ -134,20 +134,32 @@ export const AuthProvider = ({ children }) => {
             roleCache.current.delete(sessionUser.id)
         }
 
-        // 1. Immediately set user state synchronously so avatar renders instantly (0ms delay)
-        const storedAvatar = localStorage.getItem('user_avatar_custom')
-        const initialAvatar = storedAvatar || sessionUser.user_metadata?.avatar_url || DEFAULT_INDIAN_MALE_AVATAR
-        const initialName = sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || (sessionUser.email ? sessionUser.email.split('@')[0] : '')
+        // 1. Immediately set user state synchronously so avatar, custom name, and phone render instantly (0ms delay)
+        const storedAvatar = localStorage.getItem(`user_avatar_custom_${sessionUser.id}`) || localStorage.getItem('user_avatar_custom')
+        const storedCustomName = localStorage.getItem('tocos_user_name_custom')
+        const storedCustomPhone = localStorage.getItem('tocos_user_phone_custom')
+        const storedProfileKey = `tocos_user_profile_${sessionUser.id || sessionUser.email}`
+        let cachedProfile = null
+        try {
+            const raw = localStorage.getItem(storedProfileKey)
+            if (raw) cachedProfile = JSON.parse(raw)
+        } catch (e) {}
+
+        const initialAvatar = sessionUser.avatar_url || storedAvatar || sessionUser.user_metadata?.avatar_url || DEFAULT_INDIAN_MALE_AVATAR
+        const initialName = storedCustomName || cachedProfile?.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || (sessionUser.email ? sessionUser.email.split('@')[0] : '')
+        const initialPhone = storedCustomPhone || cachedProfile?.phone || sessionUser.user_metadata?.phone || sessionUser.phone || ''
         const initialRole = sessionUser.user_metadata?.role || sessionUser.app_metadata?.role || (sessionUser.email === 'admin@tocos.com' ? 'admin' : 'customer')
         const isInitialAdmin = initialRole === 'admin' || sessionUser.email === 'admin@tocos.com'
 
         const immediateUser = {
             ...sessionUser,
+            phone: initialPhone,
             role: initialRole,
             user_metadata: {
                 ...(sessionUser.user_metadata || {}),
                 full_name: initialName,
                 name: initialName,
+                phone: initialPhone,
                 avatar_url: initialAvatar,
                 role: initialRole
             }
@@ -171,10 +183,16 @@ export const AuthProvider = ({ children }) => {
                     const { data: dbProfile } = await query.maybeSingle()
                     
                     if (dbProfile) {
-                        const avatar = storedAvatar || dbProfile.avatar_url || sessionUser.user_metadata?.avatar_url || DEFAULT_INDIAN_MALE_AVATAR
-                        const fullName = dbProfile.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || initialName
-                        const phone = dbProfile.phone || sessionUser.user_metadata?.phone || ''
+                        const avatar = dbProfile.avatar_url || storedAvatar || sessionUser.user_metadata?.avatar_url || DEFAULT_INDIAN_MALE_AVATAR
+                        const fullName = storedCustomName || dbProfile.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || initialName
+                        const phone = storedCustomPhone || dbProfile.phone || sessionUser.user_metadata?.phone || initialPhone
                         const userRole = dbProfile.role || initialRole
+
+                        if (dbProfile.avatar_url && sessionUser?.id) {
+                            try {
+                                localStorage.setItem(`user_avatar_custom_${sessionUser.id}`, dbProfile.avatar_url)
+                            } catch (e) {}
+                        }
 
                         const updatedUser = {
                             ...sessionUser,
@@ -212,7 +230,6 @@ export const AuthProvider = ({ children }) => {
                     sessionStorage.removeItem(key)
                 }
             }
-            localStorage.removeItem('user_avatar_custom')
             localStorage.removeItem('tocos_local_cart')
         } catch (e) {
             console.error("Storage clear error:", e)
@@ -224,15 +241,6 @@ export const AuthProvider = ({ children }) => {
             try {
                 setLoading(true)
                 const { data: sessionData } = await supabase.auth.getSession()
-                
-                // Self-healing: if auth session user_metadata contains base64 image, clean it to prevent HTTP 431
-                if (sessionData?.session?.user?.user_metadata?.avatar_url?.startsWith('data:image/')) {
-                    try {
-                        await supabase.auth.updateUser({
-                            data: { avatar_url: null }
-                        })
-                    } catch (e) {}
-                }
 
                 if (sessionData?.session?.user) {
                     await setSessionUser(sessionData.session.user)
@@ -278,7 +286,11 @@ export const AuthProvider = ({ children }) => {
 
     const updateUserAvatar = async (newAvatarUrl) => {
         try {
+            if (user?.id) {
+                localStorage.setItem(`user_avatar_custom_${user.id}`, newAvatarUrl)
+            }
             localStorage.setItem('user_avatar_custom', newAvatarUrl)
+
             if (user) {
                 const updatedUser = {
                     ...user,
@@ -289,19 +301,20 @@ export const AuthProvider = ({ children }) => {
                 }
                 setUser(updatedUser)
                 
-                // Never push massive base64 image strings into Supabase Auth JWT token (causes HTTP 431)
-                try {
-                    const isBase64 = typeof newAvatarUrl === 'string' && newAvatarUrl.startsWith('data:image/')
-                    if (!isBase64) {
-                        await supabase.auth.updateUser({
-                            data: { avatar_url: newAvatarUrl }
-                        })
-                    } else {
-                        await supabase.auth.updateUser({
-                            data: { avatar_url: null }
-                        })
+                // Sync to public.profiles DB table via UPDATE (PATCH)
+                if (user?.id) {
+                    try {
+                        await supabase
+                            .from('profiles')
+                            .update({
+                                avatar_url: newAvatarUrl,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', user.id)
+                    } catch (dbErr) {
+                        console.error("Failed to update avatar in profiles table:", dbErr)
                     }
-                } catch (e) {}
+                }
             }
         } catch (e) {
             console.error("Failed to update avatar:", e)

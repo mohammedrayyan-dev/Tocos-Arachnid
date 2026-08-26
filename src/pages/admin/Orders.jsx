@@ -37,14 +37,17 @@ const Orders = () => {
         const mapped = data.map(o => {
           const customerName = o.shipping_name || o.customer_name || o.recipient || (o.email ? o.email.split('@')[0] : 'Customer')
           const initials = customerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-          const rawId = o.id || o.order_id || o.orderId || `#AF-${Math.floor(100 + Math.random() * 900)}-XBB`
-          const displayId = String(rawId).startsWith('#') ? String(rawId) : `#${rawId}`
+          const rawId = o.id || o.order_id || o.orderId || 'ORD'
+          const displayId = o.order_number 
+            ? `#TOC-${String(o.order_number).padStart(4, '0')}`
+            : `#TOC-${String(rawId).replace(/^#/, '').slice(0, 6).toUpperCase()}`
           const numTotal = typeof o.total_amount === 'number' ? o.total_amount : parseFloat(String(o.total_amount || 0).replace(/[^\d.]/g, ''))
           const utrVal = o.utr_number || o.utrNumber || o.utr || ''
 
           return {
             id: displayId,
             rawId: rawId,
+            orderNumber: o.order_number,
             customer: customerName,
             customerInitial: initials || 'C',
             amount: numTotal > 0 ? `₹ ${numTotal.toLocaleString('en-IN')}` : (o.total_amount || '₹ 0'),

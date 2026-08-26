@@ -57,8 +57,18 @@ const ResetPassword = () => {
 
     setLoading(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword })
+      const nowIso = new Date().toISOString()
+      const { error } = await supabase.auth.updateUser({ 
+        password: newPassword,
+        data: { password_updated_at: nowIso }
+      })
       if (error) throw error
+
+      if (user?.id) {
+        try {
+          localStorage.setItem(`user_password_updated_${user.id}`, nowIso)
+        } catch (e) {}
+      }
 
       toast.success("Password updated successfully!")
       navigate("/reset-password/success")

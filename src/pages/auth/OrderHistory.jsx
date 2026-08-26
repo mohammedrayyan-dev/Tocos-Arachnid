@@ -76,7 +76,7 @@ const OrderHistory = () => {
       try {
         const { data, error } = await supabase
           .from('orders')
-          .select('*')
+          .select('*, order_items(*, products(*))')
           .order('created_at', { ascending: false })
 
         if (!error && data && Array.isArray(data)) {
@@ -92,7 +92,7 @@ const OrderHistory = () => {
 
       const userFilteredOrders = allOrders.filter(o => {
         if (!o || !o.id) return false
-        const orderEmailLower = o.email ? String(o.email).toLowerCase().trim() : ''
+        const orderEmailLower = (o.customer_email || o.email) ? String(o.customer_email || o.email).toLowerCase().trim() : ''
         const orderUserId = o.user_id ? String(o.user_id) : ''
 
         const matchesEmail = userEmailLower && orderEmailLower && userEmailLower === orderEmailLower
@@ -119,9 +119,15 @@ const OrderHistory = () => {
         const rawAmt = o.total_amount || o.amount || o.rawTotalAmount || 0
         const numericPrice = parsePriceNumber(rawAmt)
         const displayPrice = numericPrice > 0 ? `₹${numericPrice.toLocaleString('en-IN')}` : (typeof rawAmt === 'string' ? rawAmt : '₹0')
+        const rawId = o.id || o.order_id || o.orderId || 'ORD'
+        const shortOrderId = o.order_number 
+          ? `#TOC-${String(o.order_number).padStart(4, '0')}`
+          : `#TOC-${String(rawId).replace(/^#/, '').slice(0, 6).toUpperCase()}`
 
         return {
-          id: String(o.id).startsWith('#') ? String(o.id) : `#${o.id}`,
+          id: shortOrderId,
+          rawId: rawId,
+          orderNumber: o.order_number,
           state: o.shipping_city || o.shipping_state || o.shipping_address?.split(',').slice(-1)[0] || 'Tamil Nadu',
           date: new Date(o.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           rawCreatedAt: o.created_at || new Date().toISOString(),
@@ -312,7 +318,7 @@ const OrderHistory = () => {
                         {/* Delivery Address display on card with proper word wrap */}
                         <div className="mt-1 pt-2.5 border-t border-[#E5E2DC]/70 flex items-start gap-2 text-xs text-[#525B54]">
                           <MapPin className="w-3.5 h-3.5 text-[#163422] shrink-0 mt-0.5" />
-                          <p className="font-medium leading-relaxed break-words min-w-0 flex-1">
+                          <p className="font-medium leading-relaxed wrap-break-word min-w-0 flex-1">
                             <strong className="text-[#163422] font-semibold">Delivery Address:</strong> {order.address}
                           </p>
                         </div>
@@ -474,7 +480,7 @@ const OrderHistory = () => {
                 <MapPin className="w-4 h-4 text-[#163422] shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-[#163422] text-xs">Delivery Address:</p>
-                  <p className="text-xs text-[#1C1B1B] mt-0.5 leading-relaxed break-words font-medium">
+                  <p className="text-xs text-[#1C1B1B] mt-0.5 leading-relaxed wrap-break-word font-medium">
                     {showDetailsModal.address}
                   </p>
                 </div>

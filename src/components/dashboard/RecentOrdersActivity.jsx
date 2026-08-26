@@ -47,8 +47,12 @@ const RecentOrdersActivity = () => {
           const numTotal = typeof o.total_amount === 'number' ? o.total_amount : parseFloat(String(o.total_amount || o.rawTotalAmount || o.amount || 0).replace(/[^\d.]/g, ''))
           const firstItem = Array.isArray(o.items) && o.items[0] ? (o.items[0].name || o.items[0].products?.name || 'Live Specimen') : 'Live Specimen Purchase'
 
+          const shortId = o.order_number 
+            ? `#TOC-${String(o.order_number).padStart(4, '0')}`
+            : `#TOC-${String(rawId).replace(/^#/, '').slice(0, 6).toUpperCase()}`
+
           return {
-            orderId: String(rawId).startsWith('#') ? String(rawId) : `#${rawId}`,
+            orderId: shortId,
             customer: o.shipping_name || o.customer_name || o.recipient || 'Anonymous Customer',
             species: firstItem,
             price: numTotal > 0 ? `₹ ${numTotal.toLocaleString('en-IN')}` : (o.total_amount || '₹ 0'),

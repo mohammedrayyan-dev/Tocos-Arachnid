@@ -7,7 +7,7 @@ import Button from './common/Button'
 
 const HeroSection = () => {
   return (
-    <div className="relative min-h-[380px] sm:min-h-[480px] lg:min-h-175 flex items-center overflow-hidden">
+    <div className="relative min-h-95 sm:min-h-120 lg:min-h-175 flex items-center overflow-hidden">
       {/* Background Image */}
       <img 
         src={Hero} 

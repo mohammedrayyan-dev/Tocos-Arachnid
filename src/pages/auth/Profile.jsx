@@ -91,8 +91,10 @@ const Profile = () => {
         const cleanName = formData.fullName?.trim() || ''
         const cleanPhone = formData.phone?.trim() || ''
 
-        // 1. Instantly cache updated profile locally
+        // 1. Instantly cache updated profile locally for immediate zero-latency persistence
         try {
+          if (cleanName) localStorage.setItem('tocos_user_name_custom', cleanName)
+          if (cleanPhone) localStorage.setItem('tocos_user_phone_custom', cleanPhone)
           const profileCacheKey = `tocos_user_profile_${user.id || user.email}`
           localStorage.setItem(profileCacheKey, JSON.stringify({
             full_name: cleanName,
@@ -101,21 +103,7 @@ const Profile = () => {
           }))
         } catch (e) {}
 
-        // 2. Primary: Upsert Supabase public.profiles DB table
-        try {
-          await supabase
-            .from('profiles')
-            .upsert({
-              id: user.id,
-              email: user.email,
-              full_name: cleanName,
-              phone: cleanPhone
-            }, { onConflict: 'id' })
-        } catch (dbErr) {
-          console.warn("Profiles DB upsert exception:", dbErr)
-        }
-
-        // 3. Secondary: Update Supabase Auth user metadata
+        // 2. Primary: Update Supabase Auth user metadata
         try {
           await supabase.auth.updateUser({
             data: {
@@ -124,7 +112,25 @@ const Profile = () => {
               phone: cleanPhone
             }
           })
-        } catch (authErr) {}
+        } catch (authErr) {
+          console.warn("Supabase auth updateUser notice:", authErr)
+        }
+
+        // 3. Primary: Update Supabase public.profiles DB table
+        try {
+          if (user.id) {
+            await supabase
+              .from('profiles')
+              .update({
+                full_name: cleanName,
+                phone: cleanPhone,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', user.id)
+          }
+        } catch (dbErr) {
+          console.warn("Profiles DB update exception:", dbErr)
+        }
 
         // 4. Update active React user session state
         const updatedUser = {
@@ -142,7 +148,7 @@ const Profile = () => {
           await setSessionUser(updatedUser)
         }
       }
-      toast.success('Personal details updated & synced to database!')
+      toast.success('Personal details updated successfully!')
     } catch (e) {
       console.error("Error updating details:", e)
       toast.error(e.message || 'Failed to update personal details')
@@ -212,7 +218,7 @@ const Profile = () => {
         {/* Personal Details & Security Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 items-stretch">
           <PersonalDetails user={user} onEdit={handleEditPersonalDetails} />
-          <Security />
+          <Security user={user} />
         </div>
 
         {/* Saved Addresses */}

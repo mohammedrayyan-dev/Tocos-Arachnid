@@ -62,7 +62,7 @@ const BeginnerGuide = () => {
   return (
         <div className="flex flex-col justify-center items-center gap-10">
 
-          <div className="relative w-full min-h-[320px] sm:min-h-[450px] lg:min-h-175 flex items-center justify-center overflow-hidden">
+          <div className="relative w-full min-h-80 sm:min-h-112.5 lg:min-h-175 flex items-center justify-center overflow-hidden">
             <img src={Beginner} alt="Beginner Guide" className="absolute inset-0 w-full h-full object-cover object-center" />
 
             <div className="absolute inset-0 bg-black/50 z-10"/>

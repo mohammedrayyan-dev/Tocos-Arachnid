@@ -142,7 +142,7 @@ const ShipmentTrackingModal = ({ isOpen, order, onClose, onRefresh }) => {
               <p className="font-libre font-bold text-base text-[#163422]">
                 {orderId}
               </p>
-              <p className="text-xs text-[#525B54] mt-0.5 leading-relaxed break-words">
+              <p className="text-xs text-[#525B54] mt-0.5 leading-relaxed wrap-break-word">
                 Destination: <strong className="text-[#1C1B1B]">{destination}</strong>
               </p>
             </div>

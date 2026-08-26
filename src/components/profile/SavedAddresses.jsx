@@ -10,14 +10,17 @@ const SavedAddresses = ({ user }) => {
     const loadAddresses = async () => {
       try {
         if (user?.id) {
-          if (user.user_metadata?.addresses && Array.isArray(user.user_metadata.addresses)) {
-            setAddresses(user.user_metadata.addresses)
-          } else {
-            const { data: prof } = await supabase.from('profiles').select('addresses').eq('id', user.id).maybeSingle()
-            if (prof?.addresses && Array.isArray(prof.addresses)) {
-              setAddresses(prof.addresses)
-            }
+          let list = []
+          try {
+            const raw = localStorage.getItem(`user_addresses_${user.id}`)
+            if (raw) list = JSON.parse(raw)
+          } catch (e) {}
+
+          if (list.length === 0 && user.user_metadata?.addresses && Array.isArray(user.user_metadata.addresses)) {
+            list = user.user_metadata.addresses
           }
+
+          setAddresses(list)
         }
       } catch (e) {}
     }
@@ -42,7 +45,7 @@ const SavedAddresses = ({ user }) => {
     setAddresses(newList)
     if (user?.id) {
       try {
-        await supabase.from('profiles').upsert([{ id: user.id, email: user.email, addresses: newList }], { onConflict: 'id' })
+        localStorage.setItem(`user_addresses_${user.id}`, JSON.stringify(newList))
         await supabase.auth.updateUser({ data: { addresses: newList } })
       } catch (e) {
         console.warn("Supabase address save notice:", e)

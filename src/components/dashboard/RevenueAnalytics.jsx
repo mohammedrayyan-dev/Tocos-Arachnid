@@ -123,7 +123,7 @@ const RevenueAnalytics = () => {
 
       {/* Graph Area with 50K Target Line */}
       <div className="relative overflow-x-auto min-w-0">
-        <div className="min-w-[280px]">
+        <div className="min-w-70">
           {/* 50K Reference Line */}
           <div className="absolute left-0 right-0 top-3 border-b border-dashed border-[#785832]/40 z-10 flex justify-end pr-1">
             <span className="bg-[#FAF8F5] text-[#785832] font-bold text-[9px] px-1.5 py-0.5 rounded border border-[#E5E2DC] -translate-y-2.5">

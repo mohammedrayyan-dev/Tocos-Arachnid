@@ -184,53 +184,48 @@ const QRPayment = () => {
             // Insert into Supabase DB table for permanent cross-device persistence
             try {
                 const dbPayload = {
-                    id: orderData.orderId,
-                    user_id: activeUser?.id || null,
-                    email: activeUser?.email || 'customer@tocos.com',
+                    user_id: activeUser?.id,
                     customer_name: cleanRecipient || 'Customer',
+                    customer_email: activeUser?.email || 'customer@example.com',
+                    customer_phone: cleanPhone || '9876543210',
                     shipping_name: cleanRecipient || 'Customer',
                     phone_number: cleanPhone || '9876543210',
-                    customer_phone: cleanPhone || '9876543210',
                     shipping_address: orderData.shippingDetails?.shipping_address || 'Address on file',
-                    shipping_city: orderData.shippingDetails?.city_state || 'Bengaluru',
+                    shipping_city: orderData.shippingDetails?.city_state || orderData.shippingDetails?.city || 'Bengaluru',
                     shipping_state: orderData.shippingDetails?.state || 'Karnataka',
-                    shipping_zip: orderData.shippingDetails?.postal_code || '560001',
-                    shipping_landmark: orderData.shippingDetails?.landmark || 'Near Center',
+                    shipping_zip: orderData.shippingDetails?.postal_code || orderData.shippingDetails?.zip || '560001',
+                    shipping_landmark: orderData.shippingDetails?.landmark || 'Near Landmark',
                     total_amount: calculatedNumeric,
-                    items: orderData.items || [],
-                    utr_number: cleanUtr,
-                    utrNumber: cleanUtr,
-                    utr: cleanUtr,
-                    status: 'Pending',
-                    created_at: new Date().toISOString()
+                    payment_method: 'UPI / Razorpay',
+                    status: 'placed'
                 }
 
-                // First attempt full payload insert
-                const { error: fullErr } = await supabase.from('orders').insert([dbPayload])
-                if (fullErr) {
-                    console.warn("Supabase full insert notice, trying fallback payload:", fullErr.message)
-                    // Fallback insert if custom columns differ in schema
-                    const fallbackPayload = {
-                        user_id: activeUser?.id || null,
-                        shipping_name: cleanRecipient || 'Customer',
-                        phone_number: cleanPhone || '9876543210',
-                        shipping_address: orderData.shippingDetails?.shipping_address || 'Address on file',
-                        shipping_city: orderData.shippingDetails?.city_state || 'Bengaluru',
-                        shipping_state: orderData.shippingDetails?.state || 'Karnataka',
-                        shipping_zip: orderData.shippingDetails?.postal_code || '560001',
-                        shipping_landmark: orderData.shippingDetails?.landmark || 'Near Center',
-                        total_amount: calculatedNumeric,
-                        utr_number: cleanUtr,
-                        utrNumber: cleanUtr,
-                        utr: cleanUtr,
-                        status: 'Pending'
+                const { data: insertedOrder, error: orderErr } = await supabase
+                    .from('orders')
+                    .insert([dbPayload])
+                    .select()
+                    .single()
+
+                if (orderErr) {
+                    console.error("Supabase order insert error:", orderErr)
+                } else if (insertedOrder?.id && orderData.items?.length > 0) {
+                    const orderItemsPayload = orderData.items.map(item => ({
+                        order_id: insertedOrder.id,
+                        product_id: item.id || item.product_id,
+                        quantity: Number(item.quantity) || 1,
+                        price_at_purchase: Number(item.price || item.discounted_price || 0)
+                    }))
+
+                    const { error: itemsErr } = await supabase
+                        .from('order_items')
+                        .insert(orderItemsPayload)
+
+                    if (itemsErr) {
+                        console.warn("Supabase order_items insert warning:", itemsErr)
                     }
-                    await supabase.from('orders').insert([fallbackPayload])
-                } else {
-                    console.log("Successfully inserted complete order payload to Supabase DB!")
                 }
             } catch (dbErr) {
-                console.warn("Supabase order insert exception:", dbErr)
+                console.error("Supabase order processing exception:", dbErr)
             }
 
             if (clearCart) clearCart()

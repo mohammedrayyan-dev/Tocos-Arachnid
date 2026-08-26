@@ -293,7 +293,7 @@ const Navbar = () => {
                         >
                             <img src={Cart} alt="Cart" className="w-5 h-5 object-contain" />
                             {cartItems?.length > 0 && (
-                                <span className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#163422] text-[10px] font-bold text-white px-1 leading-none shadow-xs border border-white">
+                                <span className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#163422] text-[10px] font-bold text-white px-1 leading-none shadow-xs border border-white">
                                     {cartItems.length}
                                 </span>
                             )}
@@ -344,7 +344,7 @@ const Navbar = () => {
 
                             {/* User Account Popover Dropdown - 100% Opaque Solid White & Staked Above Everything */}
                             {userOptions && user && (
-                                <div className="absolute right-0 top-full mt-2 bg-[#FFFFFF] opacity-100 border border-[#C2C8C0] shadow-2xl z-[9999] isolate p-3 rounded-xl w-44 sm:w-48 font-hanken animate-in fade-in zoom-in-95 duration-150">
+                                <div className="absolute right-0 top-full mt-2 bg-[#FFFFFF] opacity-100 border border-[#C2C8C0] shadow-2xl z-9999 isolate p-3 rounded-xl w-44 sm:w-48 font-hanken animate-in fade-in zoom-in-95 duration-150">
                                     <div className="flex flex-col gap-1">
                                         {userOption.map((u) => (
                                             <button

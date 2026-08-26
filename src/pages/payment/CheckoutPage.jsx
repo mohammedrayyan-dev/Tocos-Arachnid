@@ -60,24 +60,16 @@ const CheckoutPage = () => {
             const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || (user?.email ? user.email.split('@')[0] : "")
             let phone = user?.user_metadata?.phone || user?.phone || ""
             
-            let loadedAddresses = user?.user_metadata?.addresses || []
+            let loadedAddresses = []
             if (user?.id) {
                 try {
-                    const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
-                    if (prof) {
-                        if (!phone && prof.phone) phone = prof.phone
-                        if (prof.address && loadedAddresses.length === 0) {
-                            loadedAddresses.push({
-                                id: 'prof-default',
-                                type: 'Default Profile Address',
-                                isDefault: true,
-                                street: prof.address,
-                                area: prof.city || prof.area || '',
-                                zipCode: prof.postal_code || prof.zip || ''
-                            })
-                        }
-                    }
+                    const raw = localStorage.getItem(`user_addresses_${user.id}`)
+                    if (raw) loadedAddresses = JSON.parse(raw)
                 } catch (e) {}
+
+                if (loadedAddresses.length === 0 && user?.user_metadata?.addresses && Array.isArray(user.user_metadata.addresses)) {
+                    loadedAddresses = user.user_metadata.addresses
+                }
             }
 
             setSavedAddresses(loadedAddresses)
