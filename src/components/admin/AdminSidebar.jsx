@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import {
@@ -17,6 +17,7 @@ import {
   X
 } from "lucide-react"
 import { useAuth } from "../../context/AuthContext"
+import { supabase } from "../../lib/supabase"
 import TocoLogo from "/src/assets/image/tocos-logo.png"
 
 const DEFAULT_ADMIN_AVATAR = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80"
@@ -28,6 +29,56 @@ const AdminSidebar = ({ currentPage }) => {
 
   const adminName = user?.user_metadata?.full_name || 'Yaashar SU'
   const adminAvatar = user?.user_metadata?.avatar_url || DEFAULT_ADMIN_AVATAR
+
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    const calcUnread = async () => {
+      try {
+        let readIds = []
+        try {
+          const saved = localStorage.getItem('tocos_read_notifications')
+          if (saved) readIds = JSON.parse(saved)
+        } catch (e) {}
+
+        let count = 0
+
+        // Check Low Stock Products count
+        try {
+          const { data: prods } = await supabase.from('products').select('id, stock').lte('stock', 5)
+          if (prods && Array.isArray(prods)) {
+            prods.forEach(p => {
+              if (!readIds.includes(`stock_${p.id}`)) count++
+            })
+          }
+        } catch (e) {}
+
+        // Check Recent Orders count
+        try {
+          const { data: ords } = await supabase.from('orders').select('id').order('created_at', { ascending: false }).limit(10)
+          if (ords && Array.isArray(ords)) {
+            ords.forEach(o => {
+              if (!readIds.includes(`order_${o.id}`)) count++
+            })
+          }
+        } catch (e) {}
+
+        setUnreadCount(count)
+      } catch (e) {}
+    }
+
+    calcUnread()
+
+    const channel = supabase
+      .channel('sidebar-notifs-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => calcUnread())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => calcUnread())
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   const nav = [
     { icon: LayoutDashboard, nav: "Dashboard", path: "/admin" },
@@ -139,7 +190,12 @@ const AdminSidebar = ({ currentPage }) => {
                   }`}
                 >
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#163422]' : 'text-[#6E756F]'}`} />
-                  <span>{n.nav}</span>
+                  <span className="flex-1">{n.nav}</span>
+                  {n.nav === "Notifications" && unreadCount > 0 && (
+                    <span className="bg-[#163422] text-white font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0">
+                      {unreadCount}
+                    </span>
+                  )}
                 </Link>
               )
             })}

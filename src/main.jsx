@@ -14,7 +14,17 @@ createRoot(document.getElementById('root')).render(
       <StoreSettingsProvider>
         <CartProvider>
           <BrowserRouter>
-            <Toaster richColors position="top-center" />
+            <Toaster 
+              richColors 
+              position="top-center" 
+              closeButton 
+              duration={3500} 
+              toastOptions={{
+                style: {
+                  zIndex: 99999
+                }
+              }}
+            />
             <App />
           </BrowserRouter>
         </CartProvider>

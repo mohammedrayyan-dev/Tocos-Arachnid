@@ -19,6 +19,17 @@ const Notifications = () => {
 
   useEffect(() => {
     fetchRealNotifications()
+
+    const channel = supabase
+      .channel('admin-notifs-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchRealNotifications())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchRealNotifications())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => fetchRealNotifications())
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   // Sync read status to localStorage
@@ -36,7 +47,7 @@ const Notifications = () => {
       // 1. Fetch Real Orders from Supabase & Local Storage
       let realOrders = []
       try {
-        const { data: dbOrders } = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(10)
+        const { data: dbOrders } = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(15)
         if (dbOrders && dbOrders.length > 0) realOrders = dbOrders
       } catch (e) {}
 
@@ -55,13 +66,13 @@ const Notifications = () => {
         const dateStr = order.created_at ? new Date(order.created_at).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently'
         
         generatedAlerts.push({
-          id,
-          title: `New Order Placed: #${String(order.id).slice(0, 8).toUpperCase()}`,
+          id: String(id),
+          title: `New Order Placed: #${String(order.id).slice(0, 12).toUpperCase()}`,
           description: `${customer} placed an order totaling ₹ ${Number(amount).toLocaleString('en-IN')}. Status: ${order.status || 'Pending'}.`,
           type: 'order',
           time: dateStr,
           rawTimestamp: order.created_at ? new Date(order.created_at).getTime() : Date.now(),
-          unread: !readIds.includes(id),
+          unread: !readIds.includes(String(id)),
           Icon: ShoppingCart,
           iconBg: 'bg-[#EAF5ED] text-[#163422]'
         })
@@ -75,7 +86,6 @@ const Notifications = () => {
       } catch (e) {}
 
       if (lowStockProducts.length === 0) {
-        // Fallback default low stock items if DB products all > 5
         lowStockProducts = [
           { id: 'stock_p1', name: 'Poecilotheria metallica (Gooty Sapphire)', stock: 3 },
           { id: 'stock_p2', name: 'Brachypelma hamorii (Mexican Red Knee)', stock: 1 }
@@ -86,13 +96,13 @@ const Notifications = () => {
         const id = `stock_${prod.id}`
         const stockCount = prod.stock ?? 2
         generatedAlerts.push({
-          id,
+          id: String(id),
           title: `Low Stock Warning: ${prod.name}`,
           description: `Only ${stockCount} ${stockCount === 1 ? 'unit' : 'units'} remaining in inventory. Consider updating stock in inventory panel.`,
           type: 'stock',
           time: 'Active Alert',
           rawTimestamp: Date.now() - 3600000,
-          unread: !readIds.includes(id),
+          unread: !readIds.includes(String(id)),
           Icon: AlertTriangle,
           iconBg: 'bg-[#FCECD9] text-[#785832]'
         })
@@ -106,13 +116,13 @@ const Notifications = () => {
             const id = `cust_${prof.id}`
             const name = prof.full_name || 'New Member'
             generatedAlerts.push({
-              id,
+              id: String(id),
               title: `New Customer Registration`,
               description: `${name} joined Toco's Arachnid platform.`,
               type: 'system',
               time: prof.created_at ? new Date(prof.created_at).toLocaleDateString('en-IN') : 'Recently',
               rawTimestamp: prof.created_at ? new Date(prof.created_at).getTime() : Date.now() - 7200000,
-              unread: !readIds.includes(id),
+              unread: !readIds.includes(String(id)),
               Icon: UserPlus,
               iconBg: 'bg-blue-50 text-blue-700'
             })
@@ -120,55 +130,54 @@ const Notifications = () => {
         }
       } catch (e) {}
 
-      // 4. Try fetching or upserting to Supabase notifications table
+      // 4. Fetch Supabase notifications table & Merge without discarding live alerts
+      let dbNotifs = []
       try {
-        const { data: dbNotifs, error: notifError } = await supabase.from('notifications').select('*').order('created_at', { ascending: false })
-        if (!notifError && dbNotifs && dbNotifs.length > 0) {
-          const mappedDbNotifs = dbNotifs.map(n => {
-            let IconComp = ShoppingCart
-            let iconBgColor = 'bg-[#EAF5ED] text-[#163422]'
-            if (n.type === 'stock') {
-              IconComp = AlertTriangle
-              iconBgColor = 'bg-[#FCECD9] text-[#785832]'
-            } else if (n.type === 'system') {
-              IconComp = UserPlus
-              iconBgColor = 'bg-blue-50 text-blue-700'
-            }
-
-            return {
-              id: n.id,
-              title: n.title,
-              description: n.description,
-              type: n.type,
-              time: n.created_at ? new Date(n.created_at).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently',
-              rawTimestamp: n.created_at ? new Date(n.created_at).getTime() : Date.now(),
-              unread: n.is_read !== undefined ? !n.is_read : !readIds.includes(n.id),
-              Icon: IconComp,
-              iconBg: iconBgColor
-            }
-          })
-          setNotifications(mappedDbNotifs)
-          setLoading(false)
-          return
-        } else if (generatedAlerts.length > 0) {
-          // Push generated order/stock alerts to Supabase table
-          await supabase.from('notifications').upsert(
-            generatedAlerts.map(a => ({
-              id: a.id,
-              title: a.title,
-              description: a.description,
-              type: a.type,
-              is_read: !a.unread,
-              created_at: new Date(a.rawTimestamp).toISOString()
-            })),
-            { onConflict: 'id' }
-          )
-        }
+        const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false })
+        if (data && Array.isArray(data)) dbNotifs = data
       } catch (e) {}
 
-      // Sort newest notifications first
-      generatedAlerts.sort((a, b) => b.rawTimestamp - a.rawTimestamp)
-      setNotifications(generatedAlerts)
+      // Deduplicate DB notifications + Live alerts by ID
+      const notifsMap = new Map()
+
+      // First insert generated live alerts
+      generatedAlerts.forEach(a => {
+        notifsMap.set(String(a.id), a)
+      })
+
+      // Merge DB notifications
+      dbNotifs.forEach(n => {
+        let IconComp = ShoppingCart
+        let iconBgColor = 'bg-[#EAF5ED] text-[#163422]'
+        if (n.type === 'stock') {
+          IconComp = AlertTriangle
+          iconBgColor = 'bg-[#FCECD9] text-[#785832]'
+        } else if (n.type === 'system') {
+          IconComp = UserPlus
+          iconBgColor = 'bg-blue-50 text-blue-700'
+        }
+
+        notifsMap.set(String(n.id), {
+          id: String(n.id),
+          title: n.title,
+          description: n.description,
+          type: n.type || 'system',
+          time: n.created_at ? new Date(n.created_at).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently',
+          rawTimestamp: n.created_at ? new Date(n.created_at).getTime() : Date.now(),
+          unread: n.is_read !== undefined ? !n.is_read : !readIds.includes(String(n.id)),
+          Icon: IconComp,
+          iconBg: iconBgColor
+        })
+      })
+
+      const combinedNotifs = Array.from(notifsMap.values())
+      const finalNotifs = combinedNotifs.map(n => ({
+        ...n,
+        unread: readIds.includes(String(n.id)) ? false : n.unread
+      }))
+
+      finalNotifs.sort((a, b) => b.rawTimestamp - a.rawTimestamp)
+      setNotifications(finalNotifs)
     } catch (e) {
       console.error('Error loading real notifications:', e)
     } finally {
