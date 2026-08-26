@@ -65,22 +65,25 @@ export const StoreSettingsProvider = ({ children }) => {
 
         if (!error && data) {
           setSettings(prev => {
+            const savedLocal = localStorage.getItem('tocos_store_settings')
+            const localParsed = savedLocal ? JSON.parse(savedLocal) : {}
+
             const merged = {
               ...prev,
-              storeName: data.store_name || prev.storeName,
-              supportEmail: data.support_email || prev.supportEmail,
-              whatsappNumber: data.whatsapp_number || prev.whatsappNumber,
-              currency: data.currency || prev.currency,
-              upiId: data.upi_id || prev.upiId,
-              payeeName: data.payee_name || prev.payeeName,
-              qrCodeImage: data.qr_code_image || prev.qrCodeImage,
-              standardShippingFee: data.standard_shipping_fee || prev.standardShippingFee,
-              expressShippingFee: data.express_shipping_fee || prev.expressShippingFee,
-              freeShippingThreshold: data.free_shipping_threshold || prev.freeShippingThreshold,
-              enableRazorpay: data.enable_razorpay ?? prev.enableRazorpay,
-              requireHealthCheck: data.require_health_check ?? prev.requireHealthCheck,
-              enableAutoEmailReceipts: data.enable_auto_email_receipts ?? prev.enableAutoEmailReceipts,
-              stateShippingRates: data.state_shipping_rates ? { ...DEFAULT_STATE_RATES, ...data.state_shipping_rates } : prev.stateShippingRates
+              storeName: localParsed.storeName || data.store_name || prev.storeName,
+              supportEmail: localParsed.supportEmail || data.support_email || prev.supportEmail,
+              whatsappNumber: localParsed.whatsappNumber || data.whatsapp_number || prev.whatsappNumber,
+              currency: localParsed.currency || data.currency || prev.currency,
+              upiId: localParsed.upiId || data.upi_id || prev.upiId,
+              payeeName: localParsed.payeeName || data.payee_name || prev.payeeName,
+              qrCodeImage: localParsed.qrCodeImage || data.qr_code_image || prev.qrCodeImage,
+              standardShippingFee: localParsed.standardShippingFee || data.standard_shipping_fee || prev.standardShippingFee,
+              expressShippingFee: localParsed.expressShippingFee || data.express_shipping_fee || prev.expressShippingFee,
+              freeShippingThreshold: localParsed.freeShippingThreshold || data.free_shipping_threshold || prev.freeShippingThreshold,
+              enableRazorpay: localParsed.enableRazorpay ?? data.enable_razorpay ?? prev.enableRazorpay,
+              requireHealthCheck: localParsed.requireHealthCheck ?? data.require_health_check ?? prev.requireHealthCheck,
+              enableAutoEmailReceipts: localParsed.enableAutoEmailReceipts ?? data.enable_auto_email_receipts ?? prev.enableAutoEmailReceipts,
+              stateShippingRates: localParsed.stateShippingRates || (data.state_shipping_rates ? { ...DEFAULT_STATE_RATES, ...data.state_shipping_rates } : prev.stateShippingRates)
             }
             localStorage.setItem('tocos_store_settings', JSON.stringify(merged))
             return merged
