@@ -37,13 +37,14 @@ const getItemImgSrc = (item) => {
 
 const OrderHistory = () => {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [liveOrders, setLiveOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [showDetailsModal, setShowDetailsModal] = useState(null)
   const [showTrackingModal, setShowTrackingModal] = useState(null)
 
   useEffect(() => {
+    if (authLoading) return
     fetchUserLiveOrders()
 
     // 1. Listen for Supabase Real-time updates (admin status changes)
@@ -64,88 +65,70 @@ const OrderHistory = () => {
       supabase.removeChannel(channel)
       window.removeEventListener('storage', handleStorageChange)
     }
-  }, [user])
+  }, [user, authLoading])
 
   const fetchUserLiveOrders = async () => {
     try {
       setLoading(true)
-      let dbOrders = []
+      let allOrders = []
 
-      // 1. Fetch from Supabase Database (Query by user_id OR email for 100% persistence)
-      if (user?.id || user?.email) {
-        try {
-          let data = null
-          if (user?.id && user?.email) {
-            const { data: res } = await supabase
-              .from('orders')
-              .select('*')
-              .or(`user_id.eq.${user.id},email.ilike.${user.email}`)
-              .order('created_at', { ascending: false })
-            data = res
-          } else if (user?.id) {
-            const { data: res } = await supabase
-              .from('orders')
-              .select('*')
-              .eq('user_id', user.id)
-              .order('created_at', { ascending: false })
-            data = res
-          } else if (user?.email) {
-            const { data: res } = await supabase
-              .from('orders')
-              .select('*')
-              .ilike('email', user.email)
-              .order('created_at', { ascending: false })
-            data = res
-          }
+      // 1. Fetch from Supabase Database for permanent persistence
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false })
 
-          if (data && Array.isArray(data)) {
-            dbOrders = data
-          }
-        } catch (e) {
-          console.warn("DB orders fetch notice:", e)
+        if (!error && data && Array.isArray(data)) {
+          allOrders.push(...data)
         }
+      } catch (e) {
+        console.warn("DB orders fetch notice:", e)
       }
 
-      // 2. Fetch from Local Storage for user & admin cache
-      let localOrders = []
+      // 2. Fetch from all Local Storage keys (user keys + admin keys + general order keys)
       try {
-        if (user?.id || user?.email) {
-          const userKey = user.id ? `user_orders_${user.id}` : `user_orders_${user.email}`
-          const saved = localStorage.getItem(userKey)
-          if (saved) {
-            const arr = JSON.parse(saved)
-            if (Array.isArray(arr)) localOrders.push(...arr)
-          }
-        }
-
-        const adminSaved = localStorage.getItem('tocos_admin_orders')
-        if (adminSaved) {
-          const arr = JSON.parse(adminSaved)
-          if (Array.isArray(arr)) {
-            const userAdminOrders = arr.filter(o => 
-              (user?.email && o.email === user.email) || 
-              (user?.id && o.user_id === user.id)
-            )
-            localOrders.push(...userAdminOrders)
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)
+          if (key && (key.startsWith('user_orders_') || key === 'tocos_admin_orders' || key.includes('order'))) {
+            try {
+              const saved = localStorage.getItem(key)
+              if (saved) {
+                const parsed = JSON.parse(saved)
+                if (Array.isArray(parsed)) {
+                  allOrders.push(...parsed)
+                } else if (parsed && typeof parsed === 'object' && parsed.id) {
+                  allOrders.push(parsed)
+                }
+              }
+            } catch (e) {}
           }
         }
       } catch (e) {}
 
-      // Combine & Deduplicate by Order ID
-      const combinedMap = new Map()
+      // 3. Filter orders belonging to current user (matching user.id or user.email case-insensitively)
+      const userEmailLower = user?.email ? String(user.email).toLowerCase().trim() : ''
+      const userId = user?.id ? String(user.id) : ''
 
-      // Local orders first
-      localOrders.forEach(o => {
-        if (o && o.id) {
-          const cleanId = String(o.id).startsWith('#') ? String(o.id) : `#${o.id}`
-          combinedMap.set(cleanId, o)
+      const userFilteredOrders = allOrders.filter(o => {
+        if (!o || !o.id) return false
+        const orderEmailLower = o.email ? String(o.email).toLowerCase().trim() : ''
+        const orderUserId = o.user_id ? String(o.user_id) : ''
+
+        const matchesEmail = userEmailLower && orderEmailLower && userEmailLower === orderEmailLower
+        const matchesId = userId && orderUserId && userId === orderUserId
+
+        if (userEmailLower || userId) {
+          return matchesEmail || matchesId
         }
+        return true
       })
 
-      // DB orders override
-      dbOrders.forEach(o => {
-        if (o && o.id) {
-          const cleanId = String(o.id).startsWith('#') ? String(o.id) : `#${o.id}`
+      // 4. Deduplicate by order ID
+      const combinedMap = new Map()
+      userFilteredOrders.forEach(o => {
+        const cleanId = String(o.id).startsWith('#') ? String(o.id) : `#${o.id}`
+        if (!combinedMap.has(cleanId) || (Array.isArray(o.items) && o.items.length > 0)) {
           combinedMap.set(cleanId, o)
         }
       })
@@ -159,7 +142,7 @@ const OrderHistory = () => {
 
         return {
           id: String(o.id).startsWith('#') ? String(o.id) : `#${o.id}`,
-          state: o.shipping_city || o.shipping_address?.split(',').slice(-1)[0] || 'Tamil Nadu',
+          state: o.shipping_city || o.shipping_state || o.shipping_address?.split(',').slice(-1)[0] || 'Tamil Nadu',
           date: new Date(o.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           rawCreatedAt: o.created_at || new Date().toISOString(),
           totalPrice: displayPrice,
@@ -321,9 +304,9 @@ const OrderHistory = () => {
 
                     {/* Main Order Item Info & Action Row */}
                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                      <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-3 min-w-0 flex-1">
                         {order.items.map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-4">
+                          <div key={idx} className="flex items-center gap-4 min-w-0">
                             <img 
                               src={getItemImgSrc(item)} 
                               alt={item.name} 
@@ -332,19 +315,27 @@ const OrderHistory = () => {
                                 e.currentTarget.src = beginnerTarantula
                               }}
                             />
-                            <div>
-                              <h3 className="font-libre text-lg font-bold text-[#163422] leading-snug">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-libre text-base sm:text-lg font-bold text-[#163422] leading-snug truncate">
                                 {item.name || item.products?.name} {item.scientific_name && <span className="font-hanken font-normal text-xs text-[#525B54]">({item.scientific_name})</span>}
                               </h3>
                               <div className="font-hanken text-xs text-[#6E756F] mt-0.5 flex items-center gap-2">
                                 <span>{item.subDetails || item.category || 'Live Specimen'}</span>
-                                <span className="bg-[#FAF8F5] border border-[#E5E2DC] text-[#163422] font-bold text-[11px] px-2 py-0.5 rounded">
+                                <span className="bg-[#FAF8F5] border border-[#E5E2DC] text-[#163422] font-bold text-[11px] px-2 py-0.5 rounded shrink-0">
                                   Qty: {item.quantity || 1}
                                 </span>
                               </div>
                             </div>
                           </div>
                         ))}
+
+                        {/* Delivery Address display on card with proper word wrap */}
+                        <div className="mt-1 pt-2.5 border-t border-[#E5E2DC]/70 flex items-start gap-2 text-xs text-[#525B54]">
+                          <MapPin className="w-3.5 h-3.5 text-[#163422] shrink-0 mt-0.5" />
+                          <p className="font-medium leading-relaxed break-words min-w-0 flex-1">
+                            <strong className="text-[#163422] font-semibold">Delivery Address:</strong> {order.address}
+                          </p>
+                        </div>
                       </div>
 
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full md:w-auto mt-2 md:mt-0">
@@ -498,8 +489,16 @@ const OrderHistory = () => {
               </div>
             </div>
 
-            <div className="py-4 space-y-2 font-hanken text-xs text-[#1C1B1B]">
-              <p><strong className="text-[#163422]">Delivery Address:</strong> {showDetailsModal.address}</p>
+            <div className="py-4 space-y-2.5 font-hanken text-xs text-[#1C1B1B]">
+              <div className="flex items-start gap-2.5 bg-[#FAF8F5] p-3 rounded-lg border border-[#E5E2DC]">
+                <MapPin className="w-4 h-4 text-[#163422] shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-[#163422] text-xs">Delivery Address:</p>
+                  <p className="text-xs text-[#1C1B1B] mt-0.5 leading-relaxed break-words font-medium">
+                    {showDetailsModal.address}
+                  </p>
+                </div>
+              </div>
               <p><strong className="text-[#163422]">Order Date:</strong> {showDetailsModal.date}</p>
               <p><strong className="text-[#163422]">Total Paid:</strong> {showDetailsModal.totalPrice}</p>
             </div>

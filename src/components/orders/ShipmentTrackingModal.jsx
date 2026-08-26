@@ -134,15 +134,15 @@ const ShipmentTrackingModal = ({ isOpen, order, onClose, onRefresh }) => {
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto max-h-[80vh] space-y-6">
           {/* Order Header Summary Card */}
-          <div className="bg-[#FAF8F5] border border-[#E5E2DC] p-4 rounded-lg flex items-center justify-between">
-            <div>
+          <div className="bg-[#FAF8F5] border border-[#E5E2DC] p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-bold text-[#6E756F] uppercase tracking-wider">
                 Order Number
               </p>
               <p className="font-libre font-bold text-base text-[#163422]">
                 {orderId}
               </p>
-              <p className="text-xs text-[#525B54] mt-0.5">
+              <p className="text-xs text-[#525B54] mt-0.5 leading-relaxed break-words">
                 Destination: <strong className="text-[#1C1B1B]">{destination}</strong>
               </p>
             </div>

@@ -156,13 +156,18 @@ const OrderDetails = ({ order, onClose, onStatusChange }) => {
                 <div>
                   <p className="text-[10px] text-[#6E756F]">Submitted UPI Transaction ID</p>
                   <p className="font-mono font-bold text-xs text-[#163422]">
-                    {order.utr_number || order.utrNumber || order.utr || '324598127041'}
+                    {order.utr_number || order.utrNumber || order.utr || 'Awaiting Verification'}
                   </p>
                 </div>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(order.utr_number || order.utrNumber || order.utr || '324598127041')
-                    toast.success('Copied UPI Transaction ID to clipboard!')
+                    const utrToCopy = order.utr_number || order.utrNumber || order.utr || ''
+                    if (utrToCopy) {
+                      navigator.clipboard.writeText(utrToCopy)
+                      toast.success('Copied UPI Transaction ID to clipboard!')
+                    } else {
+                      toast.error('No UPI Transaction ID available to copy.')
+                    }
                   }}
                   className="px-2.5 py-1 bg-[#FAF8F5] hover:bg-gray-100 text-[#163422] text-[10px] font-bold rounded border border-[#E5E2DC] cursor-pointer"
                 >
