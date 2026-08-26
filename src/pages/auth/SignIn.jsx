@@ -114,8 +114,15 @@ const SignIn = () => {
 
       if (loggedUser) {
         toast.success('Signed in successfully!')
-        const { isAdmin: isRoleAdmin } = setSessionUser ? await setSessionUser(loggedUser) : { isAdmin: false }
-        if (isRoleAdmin) {
+        if (setSessionUser) {
+          try {
+            await setSessionUser(loggedUser)
+          } catch (e) {
+            console.warn("setSessionUser notice during signin:", e)
+          }
+        }
+        const userRole = loggedUser.user_metadata?.role || loggedUser.app_metadata?.role || (loggedUser.email === 'admin@tocos.com' ? 'admin' : 'customer')
+        if (userRole === 'admin' || loggedUser.email === 'admin@tocos.com') {
           navigate('/admin', { replace: true })
         } else {
           const returnPath = location.state?.returnTo || '/'
@@ -127,8 +134,8 @@ const SignIn = () => {
       }
     } catch (error) {
       console.error('Sign-in error:', error)
-      let errMsg = error.message || 'Failed to sign in'
-      const lowerErr = (error.message || '').toLowerCase()
+      let errMsg = error?.message || 'Failed to sign in'
+      const lowerErr = (error?.message || '').toLowerCase()
       if (lowerErr.includes('invalid login credentials')) {
         errMsg = 'Invalid email or password. If you registered via Google ("Continue with Google"), please sign in using Google.'
       } else if (lowerErr.includes('email not confirmed')) {

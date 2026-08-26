@@ -4,20 +4,63 @@ import { signUp, signIn } from "../lib/auth"
 
 const DEFAULT_INDIAN_MALE_AVATAR = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80"
 
-const AuthContext = createContext()
+export const AuthContext = createContext()
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null)
-    const [loading, setLoading] = useState(true)
-    const [isAdmin, setIsAdmin] = useState(false)
+    const [user, setUserState] = useState(null)
+    const [loading, setLoadingState] = useState(true)
+    const [isAdminOverride, setIsAdminOverrideState] = useState(null)
+
+    // Refs ensure dispatchers are always available across all async closures and HMR cycles
+    const userSetterRef = useRef(setUserState)
+    const loadingSetterRef = useRef(setLoadingState)
+    const adminSetterRef = useRef(setIsAdminOverrideState)
+
+    userSetterRef.current = setUserState
+    loadingSetterRef.current = setLoadingState
+    adminSetterRef.current = setIsAdminOverrideState
+
+    function setUser(u) {
+        try {
+            if (typeof userSetterRef.current === 'function') {
+                userSetterRef.current(u)
+            }
+        } catch (e) {}
+    }
+
+    function setLoading(l) {
+        try {
+            if (typeof loadingSetterRef.current === 'function') {
+                loadingSetterRef.current(l)
+            }
+        } catch (e) {}
+    }
+
+    function setIsAdmin(val) {
+        try {
+            if (typeof adminSetterRef.current === 'function') {
+                adminSetterRef.current(val === null ? null : Boolean(val))
+            }
+        } catch (e) {}
+    }
+
+    // Derived authoritative isAdmin flag
+    const isAdmin = isAdminOverride !== null 
+        ? Boolean(isAdminOverride) 
+        : Boolean(
+            user?.role === 'admin' || 
+            user?.user_metadata?.role === 'admin' || 
+            user?.app_metadata?.role === 'admin' || 
+            user?.email === 'admin@tocos.com' || 
+            user?.email === 'mohammed@example.com'
+        )
 
     // In-memory cache and in-flight request deduplication to prevent redundant DB calls
     const roleCache = useRef(new Map())
     const pendingRoleChecks = useRef(new Map())
 
-    const checkAdminRole = async (currentUser) => {
+    async function checkAdminRole(currentUser) {
         if (!currentUser?.id) {
-            setIsAdmin(false)
             return false
         }
 
@@ -26,22 +69,17 @@ export const AuthProvider = ({ children }) => {
         // 1. Fast-path check: metadata explicitly says admin or hardcoded admin email
         if (metaRole === 'admin' || currentUser.email === 'admin@tocos.com' || currentUser.email === 'mohammed@example.com') {
             roleCache.current.set(currentUser.id, true)
-            setIsAdmin(true)
             return true
         }
 
         // 2. Return cached role if available
         if (roleCache.current.has(currentUser.id)) {
-            const cachedRole = roleCache.current.get(currentUser.id)
-            setIsAdmin(cachedRole)
-            return cachedRole
+            return roleCache.current.get(currentUser.id)
         }
 
         // 3. Deduplicate in-flight requests for the same user ID
         if (pendingRoleChecks.current.has(currentUser.id)) {
-            const adminFlag = await pendingRoleChecks.current.get(currentUser.id)
-            setIsAdmin(adminFlag)
-            return adminFlag
+            return await pendingRoleChecks.current.get(currentUser.id)
         }
 
         // 4. Primary Source of Truth: Query Supabase public.profiles table
@@ -75,19 +113,20 @@ export const AuthProvider = ({ children }) => {
 
         pendingRoleChecks.current.set(currentUser.id, checkPromise)
         const adminFlag = await checkPromise
-        setIsAdmin(adminFlag)
+        if (adminFlag) {
+            setIsAdmin(true)
+        }
         return adminFlag
     }
 
-    const syncedUserIds = useRef(new Set())
     const activeUserIdRef = useRef(null)
 
-    const setSessionUser = async (sessionUser) => {
+    async function setSessionUser(sessionUser) {
         if (!sessionUser) {
             activeUserIdRef.current = null
             setUser(null)
-            setIsAdmin(false)
-            return { user: null, isAdmin: false }
+            setIsAdmin(null)
+            return { user: null, isAdmin: false, setIsAdmin }
         }
 
         // Clear roleCache for user switch or fresh login
@@ -100,6 +139,7 @@ export const AuthProvider = ({ children }) => {
         const initialAvatar = storedAvatar || sessionUser.user_metadata?.avatar_url || DEFAULT_INDIAN_MALE_AVATAR
         const initialName = sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || (sessionUser.email ? sessionUser.email.split('@')[0] : '')
         const initialRole = sessionUser.user_metadata?.role || sessionUser.app_metadata?.role || (sessionUser.email === 'admin@tocos.com' ? 'admin' : 'customer')
+        const isInitialAdmin = initialRole === 'admin' || sessionUser.email === 'admin@tocos.com'
 
         const immediateUser = {
             ...sessionUser,
@@ -115,10 +155,9 @@ export const AuthProvider = ({ children }) => {
 
         activeUserIdRef.current = sessionUser.id
         setUser(immediateUser)
-        setIsAdmin(initialRole === 'admin')
 
         // 2. Hydrate authoritative full_name, phone, avatar_url, role from public.profiles DB table asynchronously in background
-        (async () => {
+        ;(async () => {
             try {
                 if (sessionUser?.id || sessionUser?.email) {
                     let query = supabase.from('profiles').select('*')
@@ -156,7 +195,7 @@ export const AuthProvider = ({ children }) => {
                 }
             } catch (e) {}
         })()
-        return { user: immediateUser, isAdmin: initialRole === 'admin' }
+        return { user: immediateUser, isAdmin: isInitialAdmin, setIsAdmin }
     }
 
     const clearSupabaseAuthStorage = () => {
@@ -203,7 +242,7 @@ export const AuthProvider = ({ children }) => {
                         await setSessionUser(userData.user)
                     } else {
                         setUser(null)
-                        setIsAdmin(false)
+                        setIsAdmin(null)
                     }
                 }
             } catch (err) {
@@ -218,7 +257,7 @@ export const AuthProvider = ({ children }) => {
         const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_OUT') {
                 setUser(null)
-                setIsAdmin(false)
+                setIsAdmin(null)
                 roleCache.current.clear()
                 pendingRoleChecks.current.clear()
                 setLoading(false)
@@ -229,7 +268,7 @@ export const AuthProvider = ({ children }) => {
                 await setSessionUser(session.user)
             } else if (event !== 'INITIAL_SESSION') {
                 setUser(null)
-                setIsAdmin(false)
+                setIsAdmin(null)
             }
             setLoading(false)
         })
@@ -281,12 +320,12 @@ export const AuthProvider = ({ children }) => {
             roleCache.current.clear()
             pendingRoleChecks.current.clear()
             setUser(null)
-            setIsAdmin(false)
+            setIsAdmin(null)
         }
     }
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin, signUp, signIn, signOut, updateUserAvatar, checkAdminRole, setSessionUser }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, setIsAdmin, signUp, signIn, signOut, updateUserAvatar, checkAdminRole, setSessionUser }}>
         {children}
     </AuthContext.Provider>
   )

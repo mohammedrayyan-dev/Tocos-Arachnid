@@ -26,7 +26,14 @@ const AdminLogin = () => {
                 return
             }
 
-            const { isAdmin: isRoleAdmin } = setSessionUser ? await setSessionUser(user) : { isAdmin: false }
+            if (setSessionUser) {
+                try {
+                    await setSessionUser(user)
+                } catch (e) {}
+            }
+
+            const userRole = user.user_metadata?.role || user.app_metadata?.role || (user.email === 'admin@tocos.com' ? 'admin' : 'customer')
+            const isRoleAdmin = userRole === 'admin' || user.email === 'admin@tocos.com'
 
             if (!isRoleAdmin) {
                 toast.error('You are not authorized as an admin')
