@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import TocoLogo from "/src/assets/image/tocos-logo.png"
 import Container from "./common/Container"
 import { Link, NavLink, useNavigate } from "react-router-dom"
@@ -8,6 +8,7 @@ import Cart from "/src/assets/image/icons/cart.svg"
 import Profile from "/src/assets/image/icons/profile.svg"
 import { searchProducts } from "../data/productService"
 import { useAuth } from "../context/AuthContext"
+import { useCart } from "../context/CartContext"
 import { useStoreSettings } from "../context/StoreSettingsContext"
 import { toast } from "sonner"
 import { Menu, X, ChevronDown, User, LogOut, ShoppingBag } from 'lucide-react'
@@ -70,6 +71,7 @@ const userOption = [
 const Navbar = () => {
     const { user, signOut } = useAuth()
     const { settings } = useStoreSettings()
+    const { cartItems } = useCart()
 
     const [openMenu, setOpenMenu] = useState(null)
     const [activeOption, setActiveOption] = useState(null)
@@ -81,7 +83,24 @@ const Navbar = () => {
     const [searchLoading, setSearchLoading] = useState(false)
     const [userOptions, setUserOptions] = useState(false)
 
+    const dropdownRef = useRef(null)
     const navigate = useNavigate()
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setUserOptions(false)
+            }
+        }
+        if (userOptions) {
+            document.addEventListener("mousedown", handleClickOutside)
+            document.addEventListener("touchstart", handleClickOutside)
+        }
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside)
+            document.removeEventListener("touchstart", handleClickOutside)
+        }
+    }, [userOptions])
 
     const handleUserOptions = () => {
         if (!user) {
@@ -144,7 +163,7 @@ const Navbar = () => {
     }, [searchTerm])
 
     return (
-        <div className="bg-[#FCF9F8] py-3 lg:py-4 relative border-b border-[#E5E2DC]">
+        <div className="bg-[#FCF9F8] py-3 lg:py-4 relative z-50 border-b border-[#E5E2DC]">
             <Container>
                 <div className="flex flex-row items-center justify-between gap-3 lg:gap-6 w-full relative">
 
@@ -265,57 +284,94 @@ const Navbar = () => {
                     </div>
 
                     {/* Right User & Cart Section */}
-                    <div className="flex flex-row items-center gap-2 sm:gap-4 shrink-0 z-10">
+                    <div className="flex flex-row items-center gap-2 sm:gap-4 shrink-0 relative z-50">
                         {/* Cart Button */}
                         <button
                             onClick={handleCartClick}
-                            className="cursor-pointer p-2 rounded-lg hover:bg-black/5 transition"
+                            className="relative cursor-pointer p-2 rounded-lg hover:bg-black/5 transition"
                             aria-label="Cart"
                         >
                             <img src={Cart} alt="Cart" className="w-5 h-5 object-contain" />
+                            {cartItems?.length > 0 && (
+                                <span className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#163422] text-[10px] font-bold text-white px-1 leading-none shadow-xs border border-white">
+                                    {cartItems.length}
+                                </span>
+                            )}
                         </button>
 
                         <div className="hidden lg:block h-6 w-px bg-[#C2C8C0]"></div>
 
-                        {/* Profile Button / Avatar (Desktop >= 1024px) */}
-                        <button
-                            type="button"
-                            onClick={handleUserOptions}
-                            className="hidden lg:flex flex-row items-center gap-2.5 cursor-pointer text-left focus:outline-none"
-                            aria-label="User profile"
-                        >
-                            <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center overflow-hidden rounded-lg border border-[#C2C8C0] bg-[#F3F0EE] shrink-0">
-                                {!user ? (
-                                    <img src={Profile} alt="Profile" className="w-4 h-4 object-contain" />
-                                ) : (
-                                    <img
-                                        src={user.user_metadata?.avatar_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80"}
-                                        alt="Profile avatar"
-                                        className="h-full w-full object-cover"
-                                        onError={(e) => {
-                                            e.currentTarget.src = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80"
-                                        }}
-                                    />
-                                )}
-                            </div>
-
-                            {user ? (
-                                <div className="hidden lg:flex flex-col leading-tight text-left">
-                                    <span className="font-hanken font-bold text-xs text-[#1C1B1B] truncate max-w-25 whitespace-nowrap">
-                                        {user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || "Account"}
-                                    </span>
-                                    <span className="font-hanken text-[10px] text-[#6B7280] truncate max-w-25 whitespace-nowrap">
-                                        {user.email}
-                                    </span>
+                        {/* Profile Avatar Button & Popover Menu (Mobile, Tablet, Desktop) */}
+                        <div className="relative z-50" ref={dropdownRef}>
+                            <button
+                                type="button"
+                                onClick={handleUserOptions}
+                                className="flex flex-row items-center gap-2 cursor-pointer text-left focus:outline-none p-1 sm:p-1.5 rounded-lg hover:bg-black/5 transition"
+                                aria-label="User profile"
+                            >
+                                <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center overflow-hidden rounded-lg border border-[#C2C8C0] bg-[#F3F0EE] shrink-0">
+                                    {!user ? (
+                                        <img src={Profile} alt="Profile" className="w-4 h-4 object-contain" />
+                                    ) : (
+                                        <img
+                                            src={user.user_metadata?.avatar_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80"}
+                                            alt="Profile avatar"
+                                            className="h-full w-full object-cover"
+                                            onError={(e) => {
+                                                e.currentTarget.src = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80"
+                                            }}
+                                        />
+                                    )}
                                 </div>
-                            ) : (
-                                <div className="hidden lg:flex flex-col leading-tight text-left">
-                                    <span className="font-hanken font-bold text-xs text-[#1C1B1B] whitespace-nowrap">
-                                        Sign In
-                                    </span>
+
+                                {user ? (
+                                    <div className="hidden lg:flex flex-col leading-tight text-left">
+                                        <span className="font-hanken font-bold text-xs text-[#1C1B1B] truncate max-w-28 whitespace-nowrap">
+                                            {user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || "Account"}
+                                        </span>
+                                        <span className="font-hanken text-[10px] text-[#6B7280] truncate max-w-28 whitespace-nowrap">
+                                            {user.email}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div className="hidden lg:flex flex-col leading-tight text-left">
+                                        <span className="font-hanken font-bold text-xs text-[#1C1B1B] whitespace-nowrap">
+                                            Sign In
+                                        </span>
+                                    </div>
+                                )}
+                            </button>
+
+                            {/* User Account Popover Dropdown - 100% Opaque Solid White & Staked Above Everything */}
+                            {userOptions && user && (
+                                <div className="absolute right-0 top-full mt-2 bg-[#FFFFFF] opacity-100 border border-[#C2C8C0] shadow-2xl z-[9999] isolate p-3 rounded-xl w-44 sm:w-48 font-hanken animate-in fade-in zoom-in-95 duration-150">
+                                    <div className="flex flex-col gap-1">
+                                        {userOption.map((u) => (
+                                            <button
+                                                key={u.option}
+                                                onClick={() => {
+                                                    navigate(u.link)
+                                                    setUserOptions(false)
+                                                }}
+                                                className="font-hanken text-xs sm:text-sm text-left text-[#424843] hover:text-[#163422] font-semibold cursor-pointer py-2 px-2.5 rounded-lg hover:bg-[#FAF8F5] transition flex items-center gap-2.5"
+                                            >
+                                                {u.option === "My Profile" && <User className="w-4 h-4 text-[#163422]" />}
+                                                {u.option === "Order History" && <ShoppingBag className="w-4 h-4 text-[#163422]" />}
+                                                <span>{u.option}</span>
+                                            </button>
+                                        ))}
+                                        <div className="h-px bg-[#E5E2DC] my-1" />
+                                        <button
+                                            onClick={handleSignOut}
+                                            className="font-hanken text-xs sm:text-sm text-left font-bold text-[#991B1B] hover:text-red-700 cursor-pointer py-2 px-2.5 rounded-lg hover:bg-red-50 transition flex items-center gap-2.5"
+                                        >
+                                            <LogOut className="w-4 h-4" />
+                                            <span>Sign Out</span>
+                                        </button>
+                                    </div>
                                 </div>
                             )}
-                        </button>
+                        </div>
                     </div>
 
                 </div>
@@ -349,34 +405,6 @@ const Navbar = () => {
                                 {sub}
                             </Link>
                         ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Desktop User Account Dropdown */}
-            {userOptions && (
-                <div className="hidden sm:block absolute right-6 top-full mt-1 bg-white border border-[#C2C8C0] shadow-2xl z-50 p-4 rounded-xl min-w-45">
-                    <div className="flex flex-col gap-2.5">
-                        {userOption.map((u) => (
-                            <button
-                                key={u.option}
-                                onClick={() => {
-                                    navigate(u.link)
-                                    setUserOptions(false)
-                                }}
-                                className="font-hanken text-sm text-left text-[#424843] hover:text-[#163422] font-medium cursor-pointer py-1 transition hover:pl-1"
-                            >
-                                {u.option}
-                            </button>
-                        ))}
-                        <div className="h-px bg-[#E5E2DC] my-1" />
-                        <button
-                            onClick={handleSignOut}
-                            className="font-hanken text-sm text-left font-bold text-[#991B1B] hover:text-red-700 cursor-pointer transition flex items-center gap-1.5"
-                        >
-                            <LogOut className="w-3.5 h-3.5" />
-                            <span>Sign Out</span>
-                        </button>
                     </div>
                 </div>
             )}

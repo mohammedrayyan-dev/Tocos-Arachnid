@@ -164,6 +164,7 @@ export const AuthProvider = ({ children }) => {
                 }
             }
             localStorage.removeItem('user_avatar_custom')
+            localStorage.removeItem('tocos_local_cart')
         } catch (e) {
             console.error("Storage clear error:", e)
         }

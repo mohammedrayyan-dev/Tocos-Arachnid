@@ -156,6 +156,10 @@ export const CartProvider = ({ children }) => {
 
         const fetchCart = async () => {
             if (!user?.id) {
+                setCartItems([])
+                try {
+                    localStorage.removeItem("tocos_local_cart")
+                } catch (e) {}
                 setLoading(false)
                 return
             }
@@ -166,7 +170,7 @@ export const CartProvider = ({ children }) => {
                     .select("*, products(*)")
                     .eq("user_id", user.id)
 
-                if (!error && data && isSubscribed && data.length > 0) {
+                if (!error && data && isSubscribed) {
                     setCartItems(data)
                 }
             } catch (e) {
