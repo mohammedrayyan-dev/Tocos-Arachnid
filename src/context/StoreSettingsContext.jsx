@@ -3,6 +3,20 @@ import { supabase } from '../lib/supabase'
 
 const envUpiId = import.meta.env.VITE_UPI_ID
 
+const DEFAULT_STATE_RATES = {
+  "Tamil Nadu": { standard: 150, express: 250 },
+  "Kerala": { standard: 150, express: 250 },
+  "Karnataka": { standard: 150, express: 250 },
+  "Andhra Pradesh": { standard: 150, express: 250 },
+  "Telangana": { standard: 150, express: 250 },
+  "Maharashtra": { standard: 150, express: 250 },
+  "Delhi": { standard: 150, express: 250 },
+  "Gujarat": { standard: 150, express: 250 },
+  "West Bengal": { standard: 150, express: 250 },
+  "Puducherry": { standard: 150, express: 250 },
+  "Goa": { standard: 150, express: 250 }
+}
+
 const DEFAULT_SETTINGS = {
   storeName: "Toco's Arachnid",
   supportEmail: "support@tocosarachnid.com",
@@ -15,7 +29,8 @@ const DEFAULT_SETTINGS = {
   freeShippingThreshold: "5000",
   enableRazorpay: false,
   requireHealthCheck: true,
-  enableAutoEmailReceipts: true
+  enableAutoEmailReceipts: true,
+  stateShippingRates: DEFAULT_STATE_RATES
 }
 
 const StoreSettingsContext = createContext()
@@ -24,13 +39,21 @@ export const StoreSettingsProvider = ({ children }) => {
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('tocos_store_settings')
-      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return {
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          stateShippingRates: parsed.stateShippingRates ? { ...DEFAULT_STATE_RATES, ...parsed.stateShippingRates } : DEFAULT_STATE_RATES
+        }
+      }
+      return DEFAULT_SETTINGS
     } catch (e) {
       return DEFAULT_SETTINGS
     }
   })
 
-  // Load from local settings fallback, skipping DB query if table doesn't exist
+  // Load from Supabase DB table, merging with local settings
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -40,25 +63,29 @@ export const StoreSettingsProvider = ({ children }) => {
           .maybeSingle()
 
         if (!error && data) {
-          const merged = {
-            storeName: data.store_name || DEFAULT_SETTINGS.storeName,
-            supportEmail: data.support_email || DEFAULT_SETTINGS.supportEmail,
-            whatsappNumber: data.whatsapp_number || DEFAULT_SETTINGS.whatsappNumber,
-            currency: data.currency || DEFAULT_SETTINGS.currency,
-            upiId: data.upi_id || DEFAULT_SETTINGS.upiId,
-            payeeName: data.payee_name || DEFAULT_SETTINGS.payeeName,
-            standardShippingFee: data.standard_shipping_fee || DEFAULT_SETTINGS.standardShippingFee,
-            expressShippingFee: data.express_shipping_fee || DEFAULT_SETTINGS.expressShippingFee,
-            freeShippingThreshold: data.free_shipping_threshold || DEFAULT_SETTINGS.freeShippingThreshold,
-            enableRazorpay: data.enable_razorpay ?? DEFAULT_SETTINGS.enableRazorpay,
-            requireHealthCheck: data.require_health_check ?? DEFAULT_SETTINGS.requireHealthCheck,
-            enableAutoEmailReceipts: data.enable_auto_email_receipts ?? DEFAULT_SETTINGS.enableAutoEmailReceipts
-          }
-          setSettings(merged)
-          localStorage.setItem('tocos_store_settings', JSON.stringify(merged))
+          setSettings(prev => {
+            const merged = {
+              ...prev,
+              storeName: data.store_name || prev.storeName,
+              supportEmail: data.support_email || prev.supportEmail,
+              whatsappNumber: data.whatsapp_number || prev.whatsappNumber,
+              currency: data.currency || prev.currency,
+              upiId: data.upi_id || prev.upiId,
+              payeeName: data.payee_name || prev.payeeName,
+              standardShippingFee: data.standard_shipping_fee || prev.standardShippingFee,
+              expressShippingFee: data.express_shipping_fee || prev.expressShippingFee,
+              freeShippingThreshold: data.free_shipping_threshold || prev.freeShippingThreshold,
+              enableRazorpay: data.enable_razorpay ?? prev.enableRazorpay,
+              requireHealthCheck: data.require_health_check ?? prev.requireHealthCheck,
+              enableAutoEmailReceipts: data.enable_auto_email_receipts ?? prev.enableAutoEmailReceipts,
+              stateShippingRates: data.state_shipping_rates ? { ...DEFAULT_STATE_RATES, ...data.state_shipping_rates } : prev.stateShippingRates
+            }
+            localStorage.setItem('tocos_store_settings', JSON.stringify(merged))
+            return merged
+          })
         }
       } catch (e) {
-        // Table not present in DB, use default settings silently
+        // Table not present in DB, fallback to local storage settings silently
       }
     }
 
@@ -66,13 +93,12 @@ export const StoreSettingsProvider = ({ children }) => {
   }, [])
 
   const updateSettings = async (newSettings) => {
-    const updated = { ...settings, ...newSettings }
-    setSettings(updated)
-    localStorage.setItem('tocos_store_settings', JSON.stringify(updated))
+    setSettings(prev => {
+      const updated = { ...prev, ...newSettings }
+      localStorage.setItem('tocos_store_settings', JSON.stringify(updated))
 
-    // Persist to Supabase DB
-    try {
-      await supabase.from('store_settings').upsert([{
+      // Async persist to Supabase DB
+      supabase.from('store_settings').upsert([{
         id: 1,
         store_name: updated.storeName,
         support_email: updated.supportEmail,
@@ -85,11 +111,16 @@ export const StoreSettingsProvider = ({ children }) => {
         free_shipping_threshold: updated.freeShippingThreshold,
         enable_razorpay: updated.enableRazorpay,
         require_health_check: updated.requireHealthCheck,
-        enable_auto_email_receipts: updated.enableAutoEmailReceipts
-      }])
-    } catch (e) {
-      console.warn('DB settings save notice:', e)
-    }
+        enable_auto_email_receipts: updated.enableAutoEmailReceipts,
+        state_shipping_rates: updated.stateShippingRates
+      }]).then(({ error }) => {
+        if (error) console.warn('DB settings save notice:', error)
+      }).catch(err => {
+        console.warn('DB settings save catch:', err)
+      })
+
+      return updated
+    })
   }
 
   return (

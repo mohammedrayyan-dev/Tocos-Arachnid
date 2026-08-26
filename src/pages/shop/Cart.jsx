@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import FeaturedSection from "../../components/FeaturedSection"
 import Container from "../../components/common/Container"
@@ -14,14 +14,18 @@ import beginnerTarantula from "../../assets/image/beginner-tarantula-care.webp"
 const toSlug = (str) => (str ? str.toLowerCase().replace(/\s+/g, "-") : "")
 
 const deliveryAvailability = {
-    karnataka: { available: true, eta: "2-4 days", fee: "Free" },
-    tamilnadu: { available: true, eta: "3-5 days", fee: "Free" },
-    maharashtra: { available: true, eta: "3-6 days", fee: "₹249" },
-    delhi: { available: true, eta: "2-3 days", fee: "Free" },
-    telangana: { available: true, eta: "4-6 days", fee: "₹199" },
-    kerala: { available: false, eta: "Unavailable", fee: "Not available" },
-    westbengal: { available: false, eta: "Unavailable", fee: "Not available" },
-    assam: { available: false, eta: "Unavailable", fee: "Not available" },
+    tamilnadu: { name: "Tamil Nadu", available: true, eta: "2-3 Business Days", standardFee: 150, expressFee: 250 },
+    karnataka: { name: "Karnataka", available: true, eta: "2-4 Business Days", standardFee: 150, expressFee: 250 },
+    kerala: { name: "Kerala", available: true, eta: "3-5 Business Days", standardFee: 150, expressFee: 250 },
+    andhrapradesh: { name: "Andhra Pradesh", available: true, eta: "3-5 Business Days", standardFee: 150, expressFee: 250 },
+    telangana: { name: "Telangana", available: true, eta: "3-5 Business Days", standardFee: 150, expressFee: 250 },
+}
+
+const getMinOrder = (coupon) => {
+    if (!coupon) return 0
+    const val = coupon.minimum_order ?? coupon.minimumOrderValue ?? coupon.min_order_amount ?? coupon.minOrder ?? coupon.minimumOrder ?? 0
+    const parsed = parseFloat(val)
+    return isNaN(parsed) ? 0 : parsed
 }
 
 const Cart = () => {
@@ -29,14 +33,17 @@ const Cart = () => {
     const { cartItems, updateQuantity, removeItem } = useCart()
     const { settings } = useStoreSettings()
 
-    const [deliveryState, setDeliveryState] = useState("")
+    const [deliveryState, setDeliveryState] = useState("Tamil Nadu")
     const [appliedCoupon, setAppliedCoupon] = useState(null)
     const [autoCouponNotice, setAutoCouponNotice] = useState("")
     const [customCode, setCustomCode] = useState("")
     const [shippingMethod, setShippingMethod] = useState('standard') // 'standard' | 'express'
 
-    const standardShippingFee = parseFloat(settings.standardShippingFee) || 150
-    const expressShippingFee = parseFloat(settings.expressShippingFee) || 250
+    const appliedCouponRef = useRef(appliedCoupon)
+    useEffect(() => {
+        appliedCouponRef.current = appliedCoupon
+    }, [appliedCoupon])
+
     const freeShippingThreshold = parseFloat(settings.freeShippingThreshold) || 5000
 
     const subtotal = cartItems.reduce((acc, item) => {
@@ -49,42 +56,52 @@ const Cart = () => {
         return acc + (item.quantity * origPrice)
     }, 0)
 
-    const isFreeShipping = subtotal >= freeShippingThreshold
+    const isFreeShipping = subtotal > 0 && subtotal >= freeShippingThreshold
     
-    // Compute exact shipping cost based on selected method & threshold
-    let shippingFee = 0
-    if (subtotal > 0) {
-        if (isFreeShipping) {
-            shippingFee = 0
-        } else if (shippingMethod === 'express') {
-            shippingFee = expressShippingFee
-        } else {
-            shippingFee = standardShippingFee
-        }
-    }
+    // State lookup to determine state-specific standard & express shipping rates
+    const normalizedState = (deliveryState || "Tamil Nadu").trim().toLowerCase().replace(/[^a-z]/g, '')
+    const stateStatus = normalizedState ? deliveryAvailability[normalizedState] : null
 
-    // Automatically check and apply eligible coupons from Supabase or Local Storage
+    const currentStateName = stateStatus ? stateStatus.name : (deliveryState.trim() || "Tamil Nadu")
+
+    // Read custom state rates configured in admin settings if present
+    const configuredStateRate = settings?.stateShippingRates?.[currentStateName] || settings?.stateShippingRates?.[deliveryState]
+    const customStandardFee = (configuredStateRate && configuredStateRate.standard !== undefined) ? Number(configuredStateRate.standard) : null
+    const customExpressFee = (configuredStateRate && configuredStateRate.express !== undefined) ? Number(configuredStateRate.express) : null
+
+    const currentStandardFee = customStandardFee !== null ? customStandardFee : (stateStatus ? stateStatus.standardFee : Number(settings?.standardShippingFee || 150))
+    const currentExpressFee = customExpressFee !== null ? customExpressFee : (stateStatus ? stateStatus.expressFee : Number(settings?.expressShippingFee || 250))
+    const currentStandardEta = stateStatus ? stateStatus.eta : "2-3 Business Days"
+
+    // Compute exact shipping cost based on selected method & state & threshold
+    const baseShippingFee = shippingMethod === 'express' ? currentExpressFee : currentStandardFee
+    const shippingFee = isFreeShipping ? 0 : baseShippingFee
+
+    // Automatically check and apply eligible coupons from Supabase or Local Storage on every subtotal change
     useEffect(() => {
-        if (subtotal > 0) {
-            checkAndAutoApplyCoupon(subtotal)
-        } else {
-            setAppliedCoupon(null)
-            setAutoCouponNotice("")
-        }
+        checkAndAutoApplyCoupon(subtotal)
     }, [subtotal])
 
     const checkAndAutoApplyCoupon = async (cartTotal) => {
-        if (appliedCoupon) {
-            const minOrder = parseFloat(appliedCoupon.minimum_order || appliedCoupon.minimumOrderValue || 0)
+        if (cartTotal <= 0) {
+            setAppliedCoupon(null)
+            setAutoCouponNotice("")
+            return
+        }
+
+        let currentActive = appliedCouponRef.current
+
+        if (currentActive) {
+            const minOrder = getMinOrder(currentActive)
             if (cartTotal < minOrder) {
-                const code = appliedCoupon.code
+                const code = currentActive.code
                 setAppliedCoupon(null)
                 setAutoCouponNotice("")
-                toast.error(`Ineligible for coupon "${code}". Minimum order of ₹ ${minOrder.toLocaleString('en-IN')} required.`)
-                return
+                toast.error(`Coupon "${code}" removed. Minimum order of ₹ ${minOrder.toLocaleString('en-IN')} required.`)
+                currentActive = null
             } else {
-                const savings = calculateDiscount(appliedCoupon, cartTotal)
-                setAppliedCoupon(prev => ({ ...prev, savings }))
+                const savings = calculateDiscount(currentActive, cartTotal)
+                setAppliedCoupon(prev => prev ? ({ ...prev, savings }) : null)
                 return
             }
         }
@@ -114,7 +131,7 @@ const Cart = () => {
             availableCoupons = availableCoupons.filter(c => String(c.code).toUpperCase() !== 'WELCOME10')
 
             const eligible = availableCoupons.filter(c => {
-                const minOrder = parseFloat(c.minimum_order || c.minimumOrderValue || 0)
+                const minOrder = getMinOrder(c)
                 const maxUses = parseInt(c.max_usage || c.maxUsage || 9999)
                 const usedUses = parseInt(c.usage_count || c.usageCount || 0)
                 return cartTotal >= minOrder && usedUses < maxUses
@@ -138,7 +155,13 @@ const Cart = () => {
                         savings: bestSavings
                     })
                     setAutoCouponNotice(`Best Coupon "${best.code}" Automatically Applied!`)
+                } else {
+                    setAppliedCoupon(null)
+                    setAutoCouponNotice("")
                 }
+            } else {
+                setAppliedCoupon(null)
+                setAutoCouponNotice("")
             }
         } catch (e) {
             console.warn('Auto coupon check notice:', e)
@@ -194,7 +217,7 @@ const Cart = () => {
             return
         }
 
-        const minOrder = parseFloat(foundCoupon.minimum_order || foundCoupon.minimumOrderValue || 0)
+        const minOrder = getMinOrder(foundCoupon)
 
         if (subtotal < minOrder) {
             setAppliedCoupon(null)
@@ -221,16 +244,15 @@ const Cart = () => {
     }
 
     const discountAmount = appliedCoupon ? appliedCoupon.savings : 0
-    const finalTotal = Math.max(0, subtotal - discountAmount + shippingFee)
-
-    const normalizedState = deliveryState.trim().toLowerCase()
-    const stateStatus = normalizedState ? deliveryAvailability[normalizedState] : null
+    const finalTotal = subtotal > 0 ? Math.max(0, subtotal - discountAmount + shippingFee) : 0
 
     const priceDetails = [
         { detail: "Total MRP", price: `₹ ${totalMrp.toLocaleString('en-IN')}` },
         { detail: "Item Price Subtotal", price: `₹ ${subtotal.toLocaleString('en-IN')}` },
         {
-            detail: shippingMethod === 'express' ? 'Climate Express Shipping' : 'Standard Shipping', 
+            detail: shippingMethod === 'express' 
+                ? 'Express Climate Shipping' 
+                : 'Standard Shipping', 
             price: isFreeShipping ? 'FREE' : `+ ₹ ${shippingFee.toLocaleString('en-IN')}`,
             isFree: isFreeShipping
         },
@@ -241,8 +263,8 @@ const Cart = () => {
     <div className="py-8 pb-16 font-hanken">
     <Container>
 
-        {/* Free Shipping Progress & Method Selector */}
-        <div className="bg-[#FAF8F5] border border-[#E5E2DC] p-4 rounded-md mb-5 shadow-2xs space-y-3">
+        {/* Free Shipping Progress Banner */}
+        <div className="bg-[#FAF8F5] border border-[#E5E2DC] p-4 rounded-md mb-5 shadow-2xs">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
                 <div className="flex items-start sm:items-center gap-2.5">
                     <Truck className="w-4 h-4 text-[#163422] shrink-0 mt-0.5 sm:mt-0" />
@@ -260,87 +282,163 @@ const Cart = () => {
                     {isFreeShipping ? 'FREE SHIPPING UNLOCKED' : `FREE THRESHOLD: ₹${freeShippingThreshold.toLocaleString()}`}
                 </span>
             </div>
-
-            {/* Interactive Shipping Method Selection */}
-            <div className="pt-3 border-t border-[#E5E2DC] grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Option 1: Standard Shipping (₹150) */}
-                <button
-                    type="button"
-                    onClick={() => setShippingMethod('standard')}
-                    className={`p-3 rounded-md text-left transition cursor-pointer border flex items-center justify-between ${
-                        shippingMethod === 'standard'
-                            ? 'border-2 border-[#163422] bg-white shadow-xs'
-                            : 'border-[#E5E2DC] bg-[#FAF8F5] hover:bg-white'
-                    }`}
-                >
-                    <div>
-                        <p className="font-bold text-xs text-[#163422]">Standard Shipping</p>
-                        <p className="text-[11px] text-[#6E756F]">3-5 Business Days • Standard Packaging</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-[#163422]">
-                            {isFreeShipping ? 'FREE' : `+ ₹${standardShippingFee}`}
-                        </span>
-                        {shippingMethod === 'standard' && <Check className="w-4 h-4 text-[#163422]" />}
-                    </div>
-                </button>
-
-                {/* Option 2: Express Climate Shipping (₹250) */}
-                <button
-                    type="button"
-                    onClick={() => setShippingMethod('express')}
-                    className={`p-3 rounded-md text-left transition cursor-pointer border flex items-center justify-between ${
-                        shippingMethod === 'express'
-                            ? 'border-2 border-[#163422] bg-white shadow-xs'
-                            : 'border-[#E5E2DC] bg-[#FAF8F5] hover:bg-white'
-                    }`}
-                >
-                    <div>
-                        <p className="font-bold text-xs text-[#163422]">Express Climate Shipping</p>
-                        <p className="text-[11px] text-[#6E756F]">72-Hr Heat Pack • Live Arrival Guarantee</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-[#163422]">
-                            {isFreeShipping ? 'FREE' : `+ ₹${expressShippingFee}`}
-                        </span>
-                        {shippingMethod === 'express' && <Check className="w-4 h-4 text-[#163422]" />}
-                    </div>
-                </button>
-            </div>
         </div>
 
-        <div className="bg-white border border-[#C2C8C0] p-4 sm:p-5 shadow-2xs">
+        {/* Check Delivery Availability Section & Select Shipping Method */}
+        <div className="bg-white border border-[#C2C8C0] p-4 sm:p-5 shadow-2xs rounded-md space-y-4 font-hanken mb-5">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex flex-row items-center gap-3 sm:gap-6">
+                <div className="flex flex-row items-center gap-3 sm:gap-4">
                     <img src={Shipping} className="w-5 object-contain shrink-0" alt="Shipping" />
-                    <p className="font-hanken font-semibold text-xs sm:text-sm text-[#1C1B1B]">
-                        Check Delivery Availability
-                    </p>
+                    <div>
+                        <p className="font-semibold text-xs sm:text-sm text-[#1C1B1B]">
+                            Select Delivery State & Calculate Shipping Rates
+                        </p>
+                        <p className="text-[11px] text-[#6E756F]">
+                            Standard & Express shipping costs are determined automatically by state
+                        </p>
+                    </div>
                 </div>
 
-                <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto">
-                    <input 
-                        type="text"
-                        value={deliveryState}
-                        onChange={(e) => setDeliveryState(e.target.value)}
-                        placeholder="Enter State"
-                        className="bg-[#F0EDED] py-2 px-4 font-sand font-semibold text-[#6B7280] text-xs sm:text-sm focus:outline-none rounded-sm w-full sm:w-45"
-                    />
+                {deliveryState.trim() && (
+                    <div className="text-left sm:text-right">
+                        <p className="text-xs font-bold text-[#163422]">
+                            ✓ Delivering to {currentStateName || deliveryState.trim()} 
+                        </p>
+                        <p className="text-[11px] text-[#525B54]">
+                            Standard: ₹{currentStandardFee} • Express: ₹{currentExpressFee}
+                        </p>
+                    </div>
+                )}
+            </div>
 
-                    {deliveryState.trim() && (
-                        <div className="text-right">
-                            {stateStatus ? (
-                                <p className={`font-hanken text-xs ${stateStatus.available ? "text-[#163422]" : "text-[#8B3E32]"}`}>
-                                    {stateStatus.available ? `Available in ${deliveryState.trim()}` : `Not delivering to ${deliveryState.trim()}`} 
-                                    <span className="font-semibold ml-1">• {stateStatus.eta}</span>
-                                </p>
-                            ) : (
-                                <p className="font-hanken text-xs text-[#6B7280]">
-                                    Try a supported state like Karnataka, Tamil Nadu, Maharashtra, Delhi or Telangana
-                                </p>
-                            )}
+            {/* Quick Select States Pills */}
+            <div className="pt-3 border-t border-[#E5E2DC] space-y-2">
+                <p className="text-[10px] font-bold text-[#6E756F] uppercase tracking-wider">
+                    Quick Select States:
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                    {['Tamil Nadu', 'Karnataka', 'Kerala', 'Andhra Pradesh', 'Telangana'].map((stName) => {
+                        const configured = settings?.stateShippingRates?.[stName]
+                        const normKey = stName.toLowerCase().replace(/[^a-z]/g, '')
+                        const statusObj = deliveryAvailability[normKey]
+                        const std = configured?.standard !== undefined ? Number(configured.standard) : (statusObj ? statusObj.standardFee : Number(settings?.standardShippingFee || 150))
+                        const exp = configured?.express !== undefined ? Number(configured.express) : (statusObj ? statusObj.expressFee : Number(settings?.expressShippingFee || 250))
+                        const isSelected = deliveryState.trim().toLowerCase() === stName.toLowerCase()
+
+                        return (
+                            <button
+                                key={stName}
+                                type="button"
+                                onClick={() => setDeliveryState(stName)}
+                                className={`text-xs px-3 py-1.5 rounded-full border transition cursor-pointer font-bold flex items-center gap-1.5 ${
+                                    isSelected
+                                        ? 'bg-[#163422] text-white border-[#163422] shadow-2xs'
+                                        : 'bg-[#FAF8F5] text-[#163422] border-[#C2C8C0] hover:border-[#163422] hover:bg-white'
+                                }`}
+                            >
+                                <span>{stName}</span>
+                                <span className={`text-[10px] ${isSelected ? 'text-white/80' : 'text-[#6E756F]'}`}>
+                                    (Std ₹{std} / Exp ₹{exp})
+                                </span>
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+
+            {/* Dropdown Menu Below */}
+            <div className="pt-2 border-t border-[#E5E2DC]">
+                <label className="block text-[10px] font-bold text-[#6E756F] uppercase tracking-wider mb-1.5">
+                    Or Select State from All-India Dropdown:
+                </label>
+                <select
+                    value={deliveryState}
+                    onChange={(e) => setDeliveryState(e.target.value)}
+                    className="w-full bg-[#FAF8F5] border border-[#C2C8C0] py-2.5 px-3.5 font-hanken font-bold text-[#1C1B1B] text-xs sm:text-sm focus:outline-none focus:border-[#163422] rounded-md cursor-pointer shadow-2xs"
+                >
+                    <option value="">-- Select Your Delivery State --</option>
+                    {[
+                        "Tamil Nadu", "Kerala", "Karnataka", "Andhra Pradesh", "Telangana",
+                        "Maharashtra", "Delhi", "Gujarat", "West Bengal", "Puducherry", "Goa",
+                        "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Haryana",
+                        "Himachal Pradesh", "Jharkhand", "Madhya Pradesh", "Manipur", "Meghalaya",
+                        "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim",
+                        "Tripura", "Uttar Pradesh", "Uttarakhand", "Andaman and Nicobar Islands",
+                        "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Jammu and Kashmir",
+                        "Ladakh", "Lakshadweep"
+                    ].map((stName) => {
+                        const configured = settings?.stateShippingRates?.[stName]
+                        const normKey = stName.toLowerCase().replace(/[^a-z]/g, '')
+                        const statusObj = deliveryAvailability[normKey]
+                        const std = configured?.standard !== undefined ? Number(configured.standard) : (statusObj ? statusObj.standardFee : Number(settings?.standardShippingFee || 150))
+                        const exp = configured?.express !== undefined ? Number(configured.express) : (statusObj ? statusObj.expressFee : Number(settings?.expressShippingFee || 250))
+
+                        return (
+                            <option key={stName} value={stName}>
+                                {stName} — Standard: ₹{std} | Express: ₹{exp}
+                            </option>
+                        )
+                    })}
+                </select>
+            </div>
+
+            {/* Interactive Shipping Method Selection (Standard & Express BELOW Dropdown) */}
+            <div className="pt-3 border-t border-[#E5E2DC]">
+                <label className="block text-[10px] font-bold text-[#6E756F] uppercase tracking-wider mb-2">
+                    Select Shipping Method:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Option 1: Standard Shipping */}
+                    <button
+                        type="button"
+                        onClick={() => setShippingMethod('standard')}
+                        className={`p-3 rounded-md text-left transition cursor-pointer border flex items-center justify-between ${
+                            shippingMethod === 'standard'
+                                ? 'border-2 border-[#163422] bg-white shadow-xs'
+                                : 'border-[#E5E2DC] bg-[#FAF8F5] hover:bg-white'
+                        }`}
+                    >
+                        <div>
+                            <p className="font-bold text-xs text-[#163422]">
+                                Standard Shipping
+                            </p>
+                            <p className="text-[11px] text-[#6E756F]">
+                                {currentStateName ? `${currentStateName} • ` : ''}{currentStandardEta} • Standard Packaging
+                            </p>
                         </div>
-                    )}
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-[#163422]">
+                                {isFreeShipping ? 'FREE' : `+ ₹${currentStandardFee}`}
+                            </span>
+                            {shippingMethod === 'standard' && <Check className="w-4 h-4 text-[#163422]" />}
+                        </div>
+                    </button>
+
+                    {/* Option 2: Express Climate Shipping */}
+                    <button
+                        type="button"
+                        onClick={() => setShippingMethod('express')}
+                        className={`p-3 rounded-md text-left transition cursor-pointer border flex items-center justify-between ${
+                            shippingMethod === 'express'
+                                ? 'border-2 border-[#163422] bg-white shadow-xs'
+                                : 'border-[#E5E2DC] bg-[#FAF8F5] hover:bg-white'
+                        }`}
+                    >
+                        <div>
+                            <p className="font-bold text-xs text-[#163422]">
+                                Express Climate Shipping
+                            </p>
+                            <p className="text-[11px] text-[#6E756F]">
+                                {currentStateName ? `${currentStateName} • ` : ''}72-Hr Heat Pack • Live Arrival Guarantee
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-[#163422]">
+                                {isFreeShipping ? 'FREE' : `+ ₹${currentExpressFee}`}
+                            </span>
+                            {shippingMethod === 'express' && <Check className="w-4 h-4 text-[#163422]" />}
+                        </div>
+                    </button>
                 </div>
             </div>
         </div>
@@ -540,20 +638,32 @@ const Cart = () => {
 
                 <Button
                     variant="brandb"
-                    className="py-3.5 w-full uppercase tracking-wider font-bold text-xs cursor-pointer"
-                    onClick={() => navigate('/checkout', { 
-                        state: { 
-                            subtotal, 
-                            shippingFee, 
-                            discountAmount, 
-                            finalTotal, 
-                            totalAmount: finalTotal, 
-                            appliedCoupon, 
-                            shippingMethod 
-                        } 
-                    })}
+                    disabled={cartItems.length === 0}
+                    className={`py-3.5 w-full uppercase tracking-wider font-bold text-xs ${
+                        cartItems.length === 0 
+                            ? 'opacity-60 cursor-not-allowed bg-gray-400 hover:bg-gray-400' 
+                            : 'cursor-pointer'
+                    }`}
+                    onClick={() => {
+                        if (cartItems.length === 0) {
+                            toast.error("Your cart is currently empty. Please add items before placing an order.")
+                            return
+                        }
+                        navigate('/checkout', { 
+                            state: { 
+                                subtotal, 
+                                shippingFee, 
+                                discountAmount, 
+                                finalTotal, 
+                                totalAmount: finalTotal, 
+                                appliedCoupon, 
+                                shippingMethod,
+                                deliveryState: currentStateName
+                            } 
+                        })
+                    }}
                 >
-                    Place Order - ₹{finalTotal.toLocaleString('en-IN')}
+                    {cartItems.length === 0 ? 'Cart is Empty' : `Place Order - ₹${finalTotal.toLocaleString('en-IN')}`}
                 </Button>
 
                 <p className="text-xs text-[#6E756F] text-center leading-relaxed">
