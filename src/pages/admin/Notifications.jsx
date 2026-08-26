@@ -8,14 +8,7 @@ const Notifications = () => {
   const [filter, setFilter] = useState('All')
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState([])
-  const [readIds, setReadIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('tocos_read_notifications')
-      return saved ? JSON.parse(saved) : []
-    } catch (e) {
-      return []
-    }
-  })
+  const [readIds, setReadIds] = useState([])
 
   useEffect(() => {
     fetchRealNotifications()
@@ -32,31 +25,17 @@ const Notifications = () => {
     }
   }, [])
 
-  // Sync read status to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('tocos_read_notifications', JSON.stringify(readIds))
-    } catch (e) {}
-  }, [readIds])
-
   const fetchRealNotifications = async () => {
     setLoading(true)
     const generatedAlerts = []
 
     try {
-      // 1. Fetch Real Orders from Supabase & Local Storage
+      // 1. Fetch Real Orders from Supabase
       let realOrders = []
       try {
         const { data: dbOrders } = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(15)
         if (dbOrders && dbOrders.length > 0) realOrders = dbOrders
       } catch (e) {}
-
-      if (realOrders.length === 0) {
-        try {
-          const local = localStorage.getItem('tocos_admin_orders')
-          if (local) realOrders = JSON.parse(local)
-        } catch (e) {}
-      }
 
       // Convert orders to notifications
       realOrders.forEach((order) => {

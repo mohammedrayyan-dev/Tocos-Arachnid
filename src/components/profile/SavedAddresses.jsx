@@ -4,34 +4,18 @@ import { MapPin, Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 const SavedAddresses = ({ user }) => {
-  const addressStorageKey = user?.id ? `user_addresses_${user.id}` : 'user_addresses_guest'
-  
-  const [addresses, setAddresses] = useState(() => {
-    try {
-      const saved = localStorage.getItem(addressStorageKey)
-      if (saved) return JSON.parse(saved)
-      if (user?.user_metadata?.addresses) return user.user_metadata.addresses
-      return []
-    } catch (e) {
-      return []
-    }
-  })
+  const [addresses, setAddresses] = useState(user?.user_metadata?.addresses || [])
 
   useEffect(() => {
     const loadAddresses = async () => {
       try {
         if (user?.id) {
-          const saved = localStorage.getItem(`user_addresses_${user.id}`)
-          if (saved) {
-            setAddresses(JSON.parse(saved))
-          } else if (user.user_metadata?.addresses && Array.isArray(user.user_metadata.addresses)) {
+          if (user.user_metadata?.addresses && Array.isArray(user.user_metadata.addresses)) {
             setAddresses(user.user_metadata.addresses)
-            localStorage.setItem(`user_addresses_${user.id}`, JSON.stringify(user.user_metadata.addresses))
           } else {
             const { data: prof } = await supabase.from('profiles').select('addresses').eq('id', user.id).maybeSingle()
             if (prof?.addresses && Array.isArray(prof.addresses)) {
               setAddresses(prof.addresses)
-              localStorage.setItem(`user_addresses_${user.id}`, JSON.stringify(prof.addresses))
             }
           }
         }
@@ -56,24 +40,14 @@ const SavedAddresses = ({ user }) => {
 
   const saveAddressesToStorage = async (newList) => {
     setAddresses(newList)
-    try {
-      localStorage.setItem(addressStorageKey, JSON.stringify(newList))
-      if (user?.id) {
-        try {
-          await supabase.from('profiles').upsert({
-            id: user.id,
-            email: user.email,
-            addresses: newList
-          }, { onConflict: 'id' })
-        } catch (e) {}
-
-        try {
-          await supabase.auth.updateUser({
-            data: { addresses: newList }
-          })
-        } catch (e) {}
+    if (user?.id) {
+      try {
+        await supabase.from('profiles').upsert([{ id: user.id, email: user.email, addresses: newList }], { onConflict: 'id' })
+        await supabase.auth.updateUser({ data: { addresses: newList } })
+      } catch (e) {
+        console.warn("Supabase address save notice:", e)
       }
-    } catch (e) {}
+    }
   }
 
   const handleAddAddress = (e) => {

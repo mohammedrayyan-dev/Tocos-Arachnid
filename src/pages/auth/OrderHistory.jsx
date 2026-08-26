@@ -72,7 +72,7 @@ const OrderHistory = () => {
       setLoading(true)
       let allOrders = []
 
-      // 1. Fetch from Supabase Database for permanent persistence
+      // Fetch from Supabase Database for permanent persistence
       try {
         const { data, error } = await supabase
           .from('orders')
@@ -85,26 +85,6 @@ const OrderHistory = () => {
       } catch (e) {
         console.warn("DB orders fetch notice:", e)
       }
-
-      // 2. Fetch from all Local Storage keys (user keys + admin keys + general order keys)
-      try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (key && (key.startsWith('user_orders_') || key === 'tocos_admin_orders' || key.includes('order'))) {
-            try {
-              const saved = localStorage.getItem(key)
-              if (saved) {
-                const parsed = JSON.parse(saved)
-                if (Array.isArray(parsed)) {
-                  allOrders.push(...parsed)
-                } else if (parsed && typeof parsed === 'object' && parsed.id) {
-                  allOrders.push(parsed)
-                }
-              }
-            } catch (e) {}
-          }
-        }
-      } catch (e) {}
 
       // 3. Filter orders belonging to current user (matching user.id or user.email case-insensitively)
       const userEmailLower = user?.email ? String(user.email).toLowerCase().trim() : ''

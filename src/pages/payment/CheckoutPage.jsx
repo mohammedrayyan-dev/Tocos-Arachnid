@@ -60,15 +60,8 @@ const CheckoutPage = () => {
             const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || (user?.email ? user.email.split('@')[0] : "")
             let phone = user?.user_metadata?.phone || user?.phone || ""
             
-            let loadedAddresses = []
+            let loadedAddresses = user?.user_metadata?.addresses || []
             if (user?.id) {
-                try {
-                    const localSaved = localStorage.getItem(`user_addresses_${user.id}`)
-                    if (localSaved) {
-                        loadedAddresses = JSON.parse(localSaved)
-                    }
-                } catch (e) {}
-
                 try {
                     const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
                     if (prof) {

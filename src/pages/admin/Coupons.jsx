@@ -17,20 +17,10 @@ const Coupons = () => {
   }, [])
 
   const fetchCoupons = async () => {
-    let dbCoupons = []
-    let localCoupons = []
-
-    // 1. Fetch from Local Storage
-    try {
-      const saved = localStorage.getItem('tocos_coupons')
-      if (saved) localCoupons = JSON.parse(saved)
-    } catch (e) {}
-
-    // 2. Fetch from Supabase DB
     try {
       const { data, error } = await supabase.from('coupons').select('*').order('created_at', { ascending: false })
       if (!error && data && data.length > 0) {
-        dbCoupons = data.map(c => ({
+        const formatted = data.map(c => ({
           id: c.id,
           code: c.code,
           discount: c.discount_type === 'Percentage (%)' ? `${c.discount_value}% OFF` : `₹ ${c.discount_value} Fixed`,
@@ -43,18 +33,11 @@ const Coupons = () => {
           usage_count: c.usage_count || 0,
           expiryDate: c.expiry_date || 'Dec 31, 2026'
         }))
+        setCouponsList(formatted)
       }
     } catch (e) {
       console.warn('Database coupons notice:', e)
     }
-
-    // Merge and deduplicate by code
-    const combinedMap = new Map()
-    localCoupons.forEach(c => combinedMap.set(c.code.toUpperCase(), c))
-    dbCoupons.forEach(c => combinedMap.set(c.code.toUpperCase(), c))
-
-    const finalCoupons = Array.from(combinedMap.values())
-    setCouponsList(finalCoupons)
   }
 
   const handleSaveCoupon = async (formData) => {
@@ -79,17 +62,8 @@ const Coupons = () => {
       expiryDate: formData.endDate || 'Dec 31, 2026'
     }
 
-    // 1. Immediately update UI state
     setCouponsList(prev => [newCouponFormatted, ...prev.filter(c => c.code !== code)])
 
-    // 2. Immediately save to Local Storage
-    try {
-      const existing = JSON.parse(localStorage.getItem('tocos_coupons') || '[]')
-      const updated = [newCouponFormatted, ...existing.filter(c => c.code !== code)]
-      localStorage.setItem('tocos_coupons', JSON.stringify(updated))
-    } catch (e) {}
-
-    // 3. Save to Supabase DB
     try {
       const dbPayload = {
         code: code,

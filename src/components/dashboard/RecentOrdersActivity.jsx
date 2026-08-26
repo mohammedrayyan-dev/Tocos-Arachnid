@@ -34,27 +34,6 @@ const RecentOrdersActivity = () => {
   }, [])
 
   const fetchRecentOrders = async () => {
-    let localOrders = []
-    let dbOrders = []
-
-    try {
-      const saved = localStorage.getItem('tocos_admin_orders')
-      if (saved) {
-        const arr = JSON.parse(saved)
-        if (Array.isArray(arr)) localOrders.push(...arr)
-      }
-    } catch (e) {}
-
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith('user_orders_')) {
-          const arr = JSON.parse(localStorage.getItem(key) || '[]')
-          if (Array.isArray(arr)) localOrders.push(...arr)
-        }
-      }
-    } catch (e) {}
-
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -62,38 +41,24 @@ const RecentOrdersActivity = () => {
         .order('created_at', { ascending: false })
         .limit(6)
 
-      if (!error && data) dbOrders = data
-    } catch (e) {}
+      if (!error && data && data.length > 0) {
+        const mapped = data.map(o => {
+          const rawId = o.id || o.order_id || o.orderId || '#TA-89241'
+          const numTotal = typeof o.total_amount === 'number' ? o.total_amount : parseFloat(String(o.total_amount || o.rawTotalAmount || o.amount || 0).replace(/[^\d.]/g, ''))
+          const firstItem = Array.isArray(o.items) && o.items[0] ? (o.items[0].name || o.items[0].products?.name || 'Live Specimen') : 'Live Specimen Purchase'
 
-    const combinedMap = new Map()
-    localOrders.forEach(o => {
-      if (o && (o.id || o.order_id || o.orderId)) {
-        combinedMap.set(String(o.id || o.order_id || o.orderId), o)
+          return {
+            orderId: String(rawId).startsWith('#') ? String(rawId) : `#${rawId}`,
+            customer: o.shipping_name || o.customer_name || o.recipient || 'Anonymous Customer',
+            species: firstItem,
+            price: numTotal > 0 ? `₹ ${numTotal.toLocaleString('en-IN')}` : (o.total_amount || '₹ 0'),
+            status: o.status || 'Pending'
+          }
+        })
+        setRecentOrders(mapped)
       }
-    })
-    dbOrders.forEach(o => {
-      if (o && (o.id || o.order_id || o.orderId)) {
-        combinedMap.set(String(o.id || o.order_id || o.orderId), o)
-      }
-    })
-
-    const combinedList = Array.from(combinedMap.values())
-    if (combinedList.length > 0) {
-      combinedList.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-      const mapped = combinedList.slice(0, 6).map(o => {
-        const rawId = o.id || o.order_id || o.orderId || '#TA-89241'
-        const numTotal = typeof o.total_amount === 'number' ? o.total_amount : parseFloat(String(o.total_amount || o.rawTotalAmount || o.amount || 0).replace(/[^\d.]/g, ''))
-        const firstItem = Array.isArray(o.items) && o.items[0] ? o.items[0].name : 'Live Specimen Purchase'
-
-        return {
-          orderId: String(rawId).startsWith('#') ? String(rawId) : `#${rawId}`,
-          customer: o.shipping_name || o.customer_name || o.recipient || 'Anonymous Customer',
-          species: firstItem,
-          price: numTotal > 0 ? `₹ ${numTotal.toLocaleString('en-IN')}` : (o.total_amount || '₹ 0'),
-          status: o.status || 'Pending'
-        }
-      })
-      setRecentOrders(mapped)
+    } catch (e) {
+      console.warn("DB recent orders fetch error:", e)
     }
   }
 

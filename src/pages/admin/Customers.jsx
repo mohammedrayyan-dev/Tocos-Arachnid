@@ -77,32 +77,8 @@ const Customers = () => {
         if (oData) dbOrders = oData
       } catch (e) {}
 
-      // 2. Fetch Local Storage Admin Orders & Customer Session Keys
-      let localOrders = []
-      try {
-        const adminSaved = localStorage.getItem('tocos_admin_orders')
-        if (adminSaved) localOrders = JSON.parse(adminSaved)
-
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (key && key.startsWith('user_orders_')) {
-            const userSaved = localStorage.getItem(key)
-            if (userSaved) {
-              const parsed = JSON.parse(userSaved)
-              if (Array.isArray(parsed)) localOrders.push(...parsed)
-            }
-          }
-        }
-      } catch (e) {}
-
       // Combine & Deduplicate all orders by Order ID
       const allOrdersMap = new Map()
-      localOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          const key = String(o.id || o.order_id || o.orderId)
-          allOrdersMap.set(key, o)
-        }
-      })
       dbOrders.forEach(o => {
         if (o && (o.id || o.order_id || o.orderId)) {
           const key = String(o.id || o.order_id || o.orderId)

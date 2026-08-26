@@ -18,12 +18,7 @@ const OrdersTable = ({ orders, onSelectOrder, selectedOrderId, onOrdersUpdated }
     setOrdersList(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o))
 
     try {
-      // 1. Update local storage
-      const localOrders = JSON.parse(localStorage.getItem('tocos_admin_orders') || '[]')
-      const updatedLocal = localOrders.map(o => (o.id === orderId || o.id === rawId) ? { ...o, status: newStatus } : o)
-      localStorage.setItem('tocos_admin_orders', JSON.stringify(updatedLocal))
-
-      // 2. Update Supabase
+      // Update Supabase
       const { error } = await supabase
         .from('orders')
         .update({ status: newStatus })

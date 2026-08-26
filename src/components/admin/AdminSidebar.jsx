@@ -36,11 +36,6 @@ const AdminSidebar = ({ currentPage }) => {
     const calcUnread = async () => {
       try {
         let readIds = []
-        try {
-          const saved = localStorage.getItem('tocos_read_notifications')
-          if (saved) readIds = JSON.parse(saved)
-        } catch (e) {}
-
         let count = 0
 
         // Check Low Stock Products count

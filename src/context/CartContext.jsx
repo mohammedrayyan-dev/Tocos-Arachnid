@@ -15,22 +15,8 @@ const parseItemPrice = (p) => {
 
 export const CartProvider = ({ children }) => {
     const { user } = useAuth()
-    const [cartItems, setCartItems] = useState(() => {
-        try {
-            const saved = localStorage.getItem("tocos_local_cart")
-            return saved ? JSON.parse(saved) : []
-        } catch (e) {
-            return []
-        }
-    })
+    const [cartItems, setCartItems] = useState([])
     const [loading, setLoading] = useState(true)
-
-    // Save cart state to localStorage whenever it changes
-    useEffect(() => {
-        try {
-            localStorage.setItem("tocos_local_cart", JSON.stringify(cartItems))
-        } catch (e) {}
-    }, [cartItems])
 
     const totalAmount = cartItems.reduce((acc, item) => {
         const rawPrice = item.products?.discounted_price || item.products?.price || item.price || 0

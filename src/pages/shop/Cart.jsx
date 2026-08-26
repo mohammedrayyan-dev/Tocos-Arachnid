@@ -192,19 +192,9 @@ const Cart = () => {
         let foundCoupon = null
 
         try {
-            const saved = localStorage.getItem('tocos_coupons')
-            if (saved) {
-                const list = JSON.parse(saved)
-                foundCoupon = list.find(c => c.code.toUpperCase() === inputCode)
-            }
+            const { data } = await supabase.from('coupons').select('*').ilike('code', inputCode).maybeSingle()
+            if (data) foundCoupon = data
         } catch (e) {}
-
-        if (!foundCoupon) {
-            try {
-                const { data } = await supabase.from('coupons').select('*').ilike('code', inputCode).maybeSingle()
-                if (data) foundCoupon = data
-            } catch (e) {}
-        }
 
         if (!foundCoupon) {
             if (inputCode === 'WEB_ONLY_30') {

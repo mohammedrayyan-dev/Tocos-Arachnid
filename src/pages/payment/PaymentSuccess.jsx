@@ -35,7 +35,7 @@ const PaymentSuccess = () => {
   let orderData = location.state?.orderData
   if (!orderData) {
     try {
-      const saved = sessionStorage.getItem("pending_checkout_order") || localStorage.getItem("last_placed_order")
+      const saved = sessionStorage.getItem("pending_checkout_order")
       if (saved) orderData = JSON.parse(saved)
     } catch (e) {}
   }

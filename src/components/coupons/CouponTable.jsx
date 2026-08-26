@@ -27,22 +27,12 @@ const CouponTable = ({ coupons, activeFilter, searchQuery }) => {
   const handleEditSaveSuccess = (updatedData) => {
     const updated = couponsList.map(c => c.id === updatedData.id ? { ...c, ...updatedData } : c)
     setCouponsList(updated)
-
-    // Save to local storage
-    try {
-      localStorage.setItem('tocos_coupons', JSON.stringify(updated))
-    } catch (e) {}
   }
 
   const handleToggleStatus = async (id, currentStatus, code) => {
     const newStatus = currentStatus === 'ACTIVE' ? 'EXPIRED' : 'ACTIVE'
     const updated = couponsList.map(c => (c.id === id || c.code === code) ? { ...c, status: newStatus } : c)
     setCouponsList(updated)
-
-    // Save to local storage
-    try {
-      localStorage.setItem('tocos_coupons', JSON.stringify(updated))
-    } catch (e) {}
 
     try {
       if (id) {

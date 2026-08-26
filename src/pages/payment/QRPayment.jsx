@@ -181,24 +181,7 @@ const QRPayment = () => {
                 created_at: new Date().toISOString()
             }
 
-            // 1. Instantly save to local storage for Admin orders sync
-            try {
-                const existingAdmin = JSON.parse(localStorage.getItem('tocos_admin_orders') || '[]')
-                const updatedAdminOrders = [payload, ...existingAdmin.filter(o => o.id !== payload.id)]
-                localStorage.setItem('tocos_admin_orders', JSON.stringify(updatedAdminOrders))
-            } catch (e) {}
-
-            // 2. Instantly save to local storage for Customer Order History sync
-            if (activeUser?.id || activeUser?.email) {
-                try {
-                    const userKey = activeUser.id ? `user_orders_${activeUser.id}` : `user_orders_${activeUser.email}`
-                    const existingUserOrders = JSON.parse(localStorage.getItem(userKey) || '[]')
-                    const updatedUserOrders = [payload, ...existingUserOrders.filter(o => o.id !== payload.id)]
-                    localStorage.setItem(userKey, JSON.stringify(updatedUserOrders))
-                } catch (e) {}
-            }
-
-            // 3. Insert into Supabase DB table for permanent cross-device persistence
+            // Insert into Supabase DB table for permanent cross-device persistence
             try {
                 const dbPayload = {
                     id: orderData.orderId,

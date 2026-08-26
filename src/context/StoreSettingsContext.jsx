@@ -37,24 +37,9 @@ const DEFAULT_SETTINGS = {
 const StoreSettingsContext = createContext()
 
 export const StoreSettingsProvider = ({ children }) => {
-  const [settings, setSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem('tocos_store_settings')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        return {
-          ...DEFAULT_SETTINGS,
-          ...parsed,
-          stateShippingRates: parsed.stateShippingRates ? { ...DEFAULT_STATE_RATES, ...parsed.stateShippingRates } : DEFAULT_STATE_RATES
-        }
-      }
-      return DEFAULT_SETTINGS
-    } catch (e) {
-      return DEFAULT_SETTINGS
-    }
-  })
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
 
-  // Load from Supabase DB table, merging with local settings
+  // Fetch settings exclusively from Supabase DB table
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -64,33 +49,26 @@ export const StoreSettingsProvider = ({ children }) => {
           .maybeSingle()
 
         if (!error && data) {
-          setSettings(prev => {
-            const savedLocal = localStorage.getItem('tocos_store_settings')
-            const localParsed = savedLocal ? JSON.parse(savedLocal) : {}
-
-            const merged = {
-              ...prev,
-              storeName: localParsed.storeName || data.store_name || prev.storeName,
-              supportEmail: localParsed.supportEmail || data.support_email || prev.supportEmail,
-              whatsappNumber: localParsed.whatsappNumber || data.whatsapp_number || prev.whatsappNumber,
-              currency: localParsed.currency || data.currency || prev.currency,
-              upiId: localParsed.upiId || data.upi_id || prev.upiId,
-              payeeName: localParsed.payeeName || data.payee_name || prev.payeeName,
-              qrCodeImage: localParsed.qrCodeImage || data.qr_code_image || prev.qrCodeImage,
-              standardShippingFee: localParsed.standardShippingFee || data.standard_shipping_fee || prev.standardShippingFee,
-              expressShippingFee: localParsed.expressShippingFee || data.express_shipping_fee || prev.expressShippingFee,
-              freeShippingThreshold: localParsed.freeShippingThreshold || data.free_shipping_threshold || prev.freeShippingThreshold,
-              enableRazorpay: localParsed.enableRazorpay ?? data.enable_razorpay ?? prev.enableRazorpay,
-              requireHealthCheck: localParsed.requireHealthCheck ?? data.require_health_check ?? prev.requireHealthCheck,
-              enableAutoEmailReceipts: localParsed.enableAutoEmailReceipts ?? data.enable_auto_email_receipts ?? prev.enableAutoEmailReceipts,
-              stateShippingRates: localParsed.stateShippingRates || (data.state_shipping_rates ? { ...DEFAULT_STATE_RATES, ...data.state_shipping_rates } : prev.stateShippingRates)
-            }
-            localStorage.setItem('tocos_store_settings', JSON.stringify(merged))
-            return merged
-          })
+          setSettings(prev => ({
+            ...prev,
+            storeName: data.store_name || prev.storeName,
+            supportEmail: data.support_email || prev.supportEmail,
+            whatsappNumber: data.whatsapp_number || prev.whatsappNumber,
+            currency: data.currency || prev.currency,
+            upiId: data.upi_id || prev.upiId,
+            payeeName: data.payee_name || prev.payeeName,
+            qrCodeImage: data.qr_code_image || prev.qrCodeImage,
+            standardShippingFee: data.standard_shipping_fee || prev.standardShippingFee,
+            expressShippingFee: data.express_shipping_fee || prev.expressShippingFee,
+            freeShippingThreshold: data.free_shipping_threshold || prev.freeShippingThreshold,
+            enableRazorpay: data.enable_razorpay ?? prev.enableRazorpay,
+            requireHealthCheck: data.require_health_check ?? prev.requireHealthCheck,
+            enableAutoEmailReceipts: data.enable_auto_email_receipts ?? prev.enableAutoEmailReceipts,
+            stateShippingRates: data.state_shipping_rates ? { ...DEFAULT_STATE_RATES, ...data.state_shipping_rates } : prev.stateShippingRates
+          }))
         }
       } catch (e) {
-        // Table not present in DB, fallback to local storage settings silently
+        console.warn("Supabase settings fetch notice:", e)
       }
     }
 
@@ -98,12 +76,12 @@ export const StoreSettingsProvider = ({ children }) => {
   }, [])
 
   const updateSettings = async (newSettings) => {
-    setSettings(prev => {
-      const updated = { ...prev, ...newSettings }
-      localStorage.setItem('tocos_store_settings', JSON.stringify(updated))
+    const updated = { ...settings, ...newSettings }
+    setSettings(updated)
 
-      // Async persist to Supabase DB
-      supabase.from('store_settings').upsert([{
+    // Save exclusively to Supabase DB
+    try {
+      const { error } = await supabase.from('store_settings').upsert([{
         id: 1,
         store_name: updated.storeName,
         support_email: updated.supportEmail,
@@ -119,14 +97,11 @@ export const StoreSettingsProvider = ({ children }) => {
         require_health_check: updated.requireHealthCheck,
         enable_auto_email_receipts: updated.enableAutoEmailReceipts,
         state_shipping_rates: updated.stateShippingRates
-      }]).then(({ error }) => {
-        if (error) console.warn('DB settings save notice:', error)
-      }).catch(err => {
-        console.warn('DB settings save catch:', err)
-      })
-
-      return updated
-    })
+      }])
+      if (error) console.error("Supabase settings upsert error:", error)
+    } catch (err) {
+      console.error("Supabase settings upsert exception:", err)
+    }
   }
 
   return (
