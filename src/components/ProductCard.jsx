@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import Button from "./common/Button"
 import beginnerTarantula from "../assets/image/beginner-tarantula-care.webp"
@@ -11,6 +12,8 @@ const ProductCard = ({ product, fromLabel }) => {
     if (!product) return null
     const { name, slug, price, scientific_name, category, sub_category, temperament, in_stock } = product
     
+    const [quantity, setQuantity] = useState(1)
+
     let rawImg = product.thumbnail || product.image || (Array.isArray(product.images) && product.images[0])
     let imageSrc = rawImg
     if (!rawImg || String(rawImg).includes('placehold.co')) {
@@ -34,14 +37,16 @@ const ProductCard = ({ product, fromLabel }) => {
     e.preventDefault()
     e.stopPropagation()
 
+    if (!in_stock) return
+
     if (!user) {
       toast.info("Please sign in to add items to your cart")
       navigate("/signin")
       return
     }
 
-    addItem(product.id, 1, product)
-    toast.success(`${name} added to cart!`)
+    addItem(product.id, quantity, product)
+    toast.success(`${quantity}x ${name} added to cart!`)
   }
 
   return (
@@ -106,18 +111,63 @@ const ProductCard = ({ product, fromLabel }) => {
           )}
         </div>
 
-        <div className="mt-3">
-          <span 
-          className={`text-[9px] sm:text-xs font-semibold rounded-xs py-0.5 px-2 inline-block
-          ${in_stock ? "bg-[#003710] text-white" : "bg-[#A4755130] text-[#A47551]" }`}>
-            {in_stock ? "In stock" : "Sold out"}
-          </span>
+        <div className="mt-3 space-y-2">
+          <div>
+            <span 
+              className={`text-[9px] sm:text-xs font-semibold rounded-xs py-0.5 px-2 inline-block
+              ${in_stock ? "bg-[#003710] text-white" : "bg-[#A4755130] text-[#A47551]" }`}
+            >
+              {in_stock ? "In stock" : "Sold out"}
+            </span>
+          </div>
+
+          {in_stock && (
+            <div 
+              className="flex items-center justify-between gap-2 pt-0.5"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            >
+              <span className="text-xs font-bold text-[#525B54]">Quantity</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setQuantity(prev => Math.max(1, prev - 1))
+                  }}
+                  className="w-7 h-7 sm:w-8 sm:h-8 border border-[#C2C8C0] bg-[#FAF8F5] hover:bg-[#E5E2DC] text-[#1C1B1B] font-bold text-xs sm:text-sm flex items-center justify-center rounded-md transition cursor-pointer shrink-0 select-none shadow-2xs"
+                  title="Decrease Quantity"
+                  aria-label="Decrease Quantity"
+                >
+                  -
+                </button>
+                <span className="font-hanken font-bold text-xs sm:text-sm text-[#1C1B1B] px-1 min-w-6 text-center select-none">
+                  x{quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setQuantity(prev => prev + 1)
+                  }}
+                  className="w-7 h-7 sm:w-8 sm:h-8 border border-[#C2C8C0] bg-[#FAF8F5] hover:bg-[#E5E2DC] text-[#1C1B1B] font-bold text-xs sm:text-sm flex items-center justify-center rounded-md transition cursor-pointer shrink-0 select-none shadow-2xs"
+                  title="Increase Quantity"
+                  aria-label="Increase Quantity"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )}
+
           <Button
-          variant="outline"
-          className="font-bold w-full h-9 sm:h-10 mt-2 cursor-pointer text-xs sm:text-sm"
-          onClick={handleAddToCart}
+            variant="outline"
+            className="font-bold w-full h-9 sm:h-10 cursor-pointer text-xs sm:text-sm disabled:opacity-50"
+            onClick={handleAddToCart}
+            disabled={!in_stock}
           >
-              Add to Cart
+            {in_stock ? `Add to Cart (${quantity})` : 'Sold out'}
           </Button>
         </div>
     </div>

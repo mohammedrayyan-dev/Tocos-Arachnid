@@ -7,30 +7,34 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useStoreSettings } from '../../context/StoreSettingsContext'
 
-const QRCodePattern = ({ upiUrl, isExpired }) => {
+const QRCodePattern = ({ upiUrl, customQrImage, isExpired }) => {
     const [qrDataUrl, setQrDataUrl] = useState('')
 
     useEffect(() => {
+        if (customQrImage) return
         if (!upiUrl) return
         QRCode.toDataURL(upiUrl, {
-            margin: 1,
-            width: 250,
+            margin: 2,
+            width: 320,
+            errorCorrectionLevel: 'H',
             color: {
-                dark: '#163422',
+                dark: '#000000',
                 light: '#FFFFFF'
             }
         })
         .then(url => setQrDataUrl(url))
         .catch(err => console.error('QR Generation error:', err))
-    }, [upiUrl])
+    }, [upiUrl, customQrImage])
+
+    const displayImage = customQrImage || qrDataUrl
 
     return (
         <div className="relative w-48.75 h-48.75 flex items-center justify-center bg-white">
-            {qrDataUrl ? (
+            {displayImage ? (
                 <img 
-                    src={qrDataUrl} 
+                    src={displayImage} 
                     alt="UPI Payment QR Code" 
-                    className="w-47.5 h-47.5 object-contain"
+                    className="w-47.5 h-47.5 object-contain rounded-md"
                 />
             ) : (
                 <div className="w-47.5 h-47.5 bg-[#FAF8F5] animate-pulse flex items-center justify-center text-xs text-[#525B54]">
@@ -57,10 +61,10 @@ const QRPayment = () => {
     const { settings } = useStoreSettings()
 
     const envUpiId = import.meta.env.VITE_UPI_ID
-    const rawUpiId = envUpiId || settings.upiId || "9360435317@okbizaxis"
+    const rawUpiId = settings.upiId || envUpiId || "9360435317@okbizaxis"
     const activeUpiId = rawUpiId.trim()
     const activePayeeName = (settings.payeeName || settings.storeName || "Tocos Arachnid").trim()
-    
+
     // Initial 5-minute timer (300 seconds)
     const [timeLeft, setTimeLeft] = useState(300)
     const [isExpired, setIsExpired] = useState(false)
@@ -83,17 +87,22 @@ const QRPayment = () => {
     })
 
     // Clean payee name and order ID for NPCI UPI URI specification compliance:
-    // 1. Remove special characters (apostrophes, quotes) from payee name and limit length to 30 chars
-    const cleanPayeeName = activePayeeName.replace(/['"&#]/g, '').trim().slice(0, 30) || 'Tocos Arachnid'
+    // 1. Payee name: Alphanumeric only, no special characters or %20 encoding (GPay/PhonePe scanner strict rule)
+    const cleanPayeeNoSpaces = activePayeeName.replace(/[^a-zA-Z0-9]/g, '') || 'TocosArachnid'
 
-    // 2. Remove '#' symbol from orderId (NPCI specification forbids '#' or URL-unsafe symbols in transaction notes)
+    // 2. Remove '#' symbol from orderId for transaction note
     const cleanOrderId = String(orderData.orderId || '').replace(/#/g, '').trim()
 
-    // 3. Format numeric total strictly as 2 decimal places (e.g. 210.00)
+    // 3. Format numeric total strictly as 2 decimal places (e.g. 3999.00)
     const formattedAmount = Number(calculatedNumeric || 0).toFixed(2)
 
-    // 4. Construct standard scannable UPI payment link
-    const upiPaymentUrl = `upi://pay?pa=${encodeURIComponent(activeUpiId)}&pn=${encodeURIComponent(cleanPayeeName)}&am=${formattedAmount}&tn=${encodeURIComponent(`Order ${cleanOrderId}`)}&cu=INR`
+    // 4. Construct standard scannable NPCI UPI URI (DO NOT encode '@' in pa, omit 'tr' for non-gateway VPAs)
+    const upiPaymentUrl = `upi://pay?pa=${activeUpiId}&pn=${cleanPayeeNoSpaces}&am=${formattedAmount}&cu=INR`
+
+    const handleCopyUpiId = () => {
+        navigator.clipboard.writeText(activeUpiId)
+        toast.success(`Copied UPI ID "${activeUpiId}" to clipboard!`)
+    }
 
     useEffect(() => {
         if (timeLeft <= 0) {
@@ -167,6 +176,8 @@ const QRPayment = () => {
                 items: orderData.items || [],
                 status: 'Pending',
                 utr_number: cleanUtr,
+                utrNumber: cleanUtr,
+                utr: cleanUtr,
                 created_at: new Date().toISOString()
             }
 
@@ -205,6 +216,8 @@ const QRPayment = () => {
                     total_amount: calculatedNumeric,
                     items: orderData.items || [],
                     utr_number: cleanUtr,
+                    utrNumber: cleanUtr,
+                    utr: cleanUtr,
                     status: 'Pending',
                     created_at: new Date().toISOString()
                 }
@@ -224,6 +237,9 @@ const QRPayment = () => {
                         shipping_zip: orderData.shippingDetails?.postal_code || '560001',
                         shipping_landmark: orderData.shippingDetails?.landmark || 'Near Center',
                         total_amount: calculatedNumeric,
+                        utr_number: cleanUtr,
+                        utrNumber: cleanUtr,
+                        utr: cleanUtr,
                         status: 'Pending'
                     }
                     await supabase.from('orders').insert([fallbackPayload])
@@ -299,20 +315,24 @@ const QRPayment = () => {
                             <span className="font-hanken text-[11px] font-bold uppercase tracking-[0.24em] text-[#91724B]">
                                 SECURE TERMINAL
                             </span>
-                            <h3 className="font-libre text-2xl font-bold text-[#163422] mt-1.5 mb-4">
+                            <h3 className="font-libre text-2xl font-bold text-[#163422] mt-1.5 mb-2">
                                 Scan to Pay
                             </h3>
 
-                            {activeUpiId.toLowerCase().endsWith('@upi') && (
-                                <div className="w-full mb-4 bg-amber-50 border border-amber-200 rounded-md p-3 text-[11px] text-amber-900 leading-snug">
-                                    <p className="font-bold flex items-center gap-1 text-amber-800">
-                                        <span>⚠️ Demo VPA Notice</span>
-                                    </p>
-                                    <p className="mt-1">
-                                        "<code className="font-mono font-semibold">{activeUpiId}</code>" is a placeholder handle. Generic <code className="font-mono">@upi</code> IDs are rejected by UPI apps (GPay / PhonePe). Please set your actual bank UPI ID (e.g., <code className="font-mono">store@okicici</code> or <code className="font-mono">number@ybl</code>) in <strong>Admin &gt; Settings</strong>.
-                                    </p>
-                                </div>
-                            )}
+                            {/* Direct Merchant UPI ID Box (Configured via Admin > Settings) */}
+                            <div className="w-full bg-[#FAF8F5] border border-[#E3E0DA] rounded-md p-3 mb-4 text-center">
+                                <p className="text-[11px] text-[#525B54] font-medium">Merchant UPI ID (VPA):</p>
+                                <p className="font-mono font-bold text-xs sm:text-sm text-[#163422] my-1 select-all">
+                                    {activeUpiId}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={handleCopyUpiId}
+                                    className="text-[10px] font-bold uppercase tracking-wider text-[#163422] bg-[#EAF5ED] hover:bg-[#d6ebd9] border border-[#C2C8C0] px-3 py-1 rounded transition cursor-pointer mt-1"
+                                >
+                                    📋 Copy UPI ID
+                                </button>
+                            </div>
 
                             {/* QR Frame with L-shaped corner brackets & dynamic blur on expire */}
                             <div 
@@ -331,10 +351,19 @@ const QRPayment = () => {
                                 {/* Bottom-Right Corner */}
                                 <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-[#163422]"></div>
 
-                                <QRCodePattern upiUrl={upiPaymentUrl} isExpired={isExpired} />
+                                <QRCodePattern upiUrl={upiPaymentUrl} customQrImage={settings.qrCodeImage} isExpired={isExpired} />
                             </div>
 
-                            <p className="text-[11px] text-[#525B54] font-semibold mt-2 text-center flex items-center justify-center gap-1.5">
+                            {!isExpired && (
+                                <a
+                                    href={upiPaymentUrl}
+                                    className="mt-2 text-[11px] font-bold text-[#163422] underline hover:text-[#0d2316] transition flex items-center justify-center gap-1.5"
+                                >
+                                    <span>📱 Open directly in UPI App (GPay / PhonePe / Paytm)</span>
+                                </a>
+                            )}
+
+                            <p className="text-[11px] text-[#525B54] font-semibold mt-2.5 text-center flex items-center justify-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[#163422] inline-block animate-pulse"></span>
                                 <span>Verified Merchant: <strong className="text-[#163422]">{activePayeeName}</strong></span>
                             </p>

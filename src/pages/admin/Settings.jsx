@@ -273,7 +273,7 @@ const Settings = () => {
                       className="w-full bg-[#FAF8F5] border border-[#E5E2DC] rounded-md px-3.5 py-2.5 text-xs font-bold text-[#1C1B1B] focus:outline-none focus:border-[#163422]"
                     />
                     <p className="text-[10px] text-[#6E756F] mt-1 font-medium">
-                      Must be a valid bank UPI VPA (e.g. <code className="font-mono">name@okicici</code>, <code className="font-mono">number@ybl</code>, <code className="font-mono">store@paytm</code>). Generic <code className="font-mono">@upi</code> handles fail in banking apps.
+                      Must be a valid bank UPI VPA (e.g. <code className="font-mono">name@okicici</code>, <code className="font-mono">number@ybl</code>).
                     </p>
                   </div>
 
@@ -290,9 +290,71 @@ const Settings = () => {
                       className="w-full bg-[#FAF8F5] border border-[#E5E2DC] rounded-md px-3.5 py-2.5 text-xs text-[#1C1B1B] focus:outline-none focus:border-[#163422]"
                     />
                     <p className="text-[10px] text-[#6E756F] mt-1 font-medium">
-                      Merchant/Business name shown on customer payment screen (max 30 characters, plain letters/numbers).
+                      Merchant/Business name shown on customer payment screen.
                     </p>
                   </div>
+                </div>
+
+                {/* Custom Google Pay / PhonePe Static QR Code Image Upload/URL */}
+                <div className="pt-4 border-t border-[#E5E2DC]">
+                  <label className="block text-[10px] font-bold text-[#6E756F] uppercase tracking-[0.16em] mb-1.5">
+                    OFFICIAL GOOGLE PAY / PHONEPE QR CODE IMAGE (URL OR UPLOAD)
+                  </label>
+                  <p className="text-xs text-[#525B54] mb-3">
+                    Upload or paste your official QR Code image from your Google Pay, PhonePe, or Paytm Business app. Scanning your official QR guarantees 100% scan success across all Indian UPI banking apps!
+                  </p>
+
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <input
+                      type="text"
+                      name="qrCodeImage"
+                      value={formData.qrCodeImage || ''}
+                      onChange={handleChange}
+                      placeholder="Paste Image URL or upload file below"
+                      className="flex-1 bg-[#FAF8F5] border border-[#E5E2DC] rounded-md px-3.5 py-2.5 text-xs text-[#1C1B1B] focus:outline-none focus:border-[#163422]"
+                    />
+
+                    <label className="px-4 py-2.5 bg-[#163422] hover:bg-[#0D2316] text-white rounded-md text-xs font-bold transition cursor-pointer shrink-0">
+                      Upload QR Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            const reader = new FileReader()
+                            reader.onload = (event) => {
+                              setIsTouched(true)
+                              setFormData(prev => ({ ...prev, qrCodeImage: event.target.result }))
+                              toast.success('Official QR Code image loaded!')
+                            }
+                            reader.readAsDataURL(file)
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  {formData.qrCodeImage && (
+                    <div className="mt-3 p-3 bg-[#FAF8F5] border border-[#E5E2DC] rounded-lg inline-flex items-center gap-3">
+                      <img src={formData.qrCodeImage} alt="QR Code Preview" className="w-20 h-20 object-contain rounded border border-[#E5E2DC]" />
+                      <div>
+                        <p className="text-xs font-bold text-[#163422]">Official QR Active</p>
+                        <p className="text-[11px] text-[#525B54]">Customers will scan this exact QR at checkout.</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsTouched(true)
+                            setFormData(prev => ({ ...prev, qrCodeImage: '' }))
+                          }}
+                          className="text-[10px] text-red-600 font-bold hover:underline mt-1 cursor-pointer"
+                        >
+                          Remove QR Image
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

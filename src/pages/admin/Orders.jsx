@@ -140,6 +140,7 @@ const Orders = () => {
       const rawId = o.id || o.order_id || o.orderId || `#AF-${Math.floor(100 + Math.random() * 900)}-XBB`
       const displayId = String(rawId).startsWith('#') ? String(rawId) : `#${rawId}`
       const numTotal = typeof o.total_amount === 'number' ? o.total_amount : (typeof o.rawTotalAmount === 'number' ? o.rawTotalAmount : parseFloat(String(o.total_amount || o.amount || 0).replace(/[^\d.]/g, '')))
+      const utrVal = o.utr_number || o.utrNumber || o.utr || o.utr_id || ''
 
       return {
         id: displayId,
@@ -155,6 +156,9 @@ const Orders = () => {
         city: o.shipping_city || o.city_state || '',
         zip: o.shipping_zip || o.postal_code || '',
         items: o.items || [],
+        utr_number: utrVal,
+        utrNumber: utrVal,
+        utr: utrVal,
         createdAt: o.created_at || new Date().toISOString()
       }
     })
