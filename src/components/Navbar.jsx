@@ -123,6 +123,7 @@ const Navbar = () => {
             await signOut()
             setUserOptions(false)
             setMobileMenuOpen(false)
+            closeMenu()
             navigate("/")
             toast.success("Logged out successfully!")
         } catch (error) {
@@ -164,8 +165,8 @@ const Navbar = () => {
 
     return (
         <div className="bg-[#FCF9F8] py-3 lg:py-4 relative z-50 border-b border-[#E5E2DC]">
-            <Container>
-                <div className="flex flex-row items-center justify-between gap-3 lg:gap-6 w-full relative">
+            <Container className="relative z-40">
+                <div className="flex flex-row items-center justify-between gap-3 lg:gap-6 w-full relative z-40">
 
                     {/* Mobile Hamburger Toggle Button (Left side on mobile/tablet) */}
                     <button
@@ -342,9 +343,9 @@ const Navbar = () => {
                                 )}
                             </button>
 
-                            {/* User Account Popover Dropdown - 100% Opaque Solid White & Staked Above Everything */}
+                            {/* User Account Popover Dropdown - 100% Opaque Solid White & Stacked Above Everything */}
                             {userOptions && user && (
-                                <div className="absolute right-0 top-full mt-2 bg-[#FFFFFF] opacity-100 border border-[#C2C8C0] shadow-2xl z-9999 isolate p-3 rounded-xl w-44 sm:w-48 font-hanken animate-in fade-in zoom-in-95 duration-150">
+                                <div className="absolute right-0 top-full mt-2 bg-white border border-[#C2C8C0] shadow-2xl z-50 p-3 rounded-xl w-44 sm:w-48 font-hanken animate-in fade-in zoom-in-95 duration-150">
                                     <div className="flex flex-col gap-1">
                                         {userOption.map((u) => (
                                             <button
@@ -352,6 +353,7 @@ const Navbar = () => {
                                                 onClick={() => {
                                                     navigate(u.link)
                                                     setUserOptions(false)
+                                                    closeMenu()
                                                 }}
                                                 className="font-hanken text-xs sm:text-sm text-left text-[#424843] hover:text-[#163422] font-semibold cursor-pointer py-2 px-2.5 rounded-lg hover:bg-[#FAF8F5] transition flex items-center gap-2.5"
                                             >
@@ -379,7 +381,7 @@ const Navbar = () => {
 
             {/* Desktop Submenu Mega-Dropdown */}
             {openItem && (
-                <div className="hidden lg:flex absolute top-full bg-white border-t border-[#785832] flex-row z-50 w-full shadow-xl">
+                <div className="hidden lg:flex absolute top-full bg-white border-t border-[#785832] flex-row z-30 w-full shadow-xl">
                     <div className="flex flex-col gap-4 min-w-60 p-6 border-r border-[#E5E2DC]">
                         {openItem.options.map((o) => (
                             <button
