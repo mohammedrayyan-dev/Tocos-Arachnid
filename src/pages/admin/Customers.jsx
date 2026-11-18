@@ -7,47 +7,7 @@ import { supabase } from '../../lib/supabase'
 const Customers = () => {
   const [activeFilter, setActiveFilter] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
-
-  const defaultCustomerList = [
-    {
-      id: 1,
-      name: 'Elias Thorne',
-      email: 'elias.thorne@example.com',
-      phone: '+91 98765 43210',
-      initials: 'ET',
-      tier: 'VIP Collector',
-      isVip: true,
-      ordersCount: 14,
-      totalSpent: '₹ 84,500',
-      joinedDate: 'Jan 15, 2024'
-    },
-    {
-      id: 2,
-      name: 'Arjun Mehta',
-      email: 'arjun.mehta@example.com',
-      phone: '+91 98765 43211',
-      initials: 'AM',
-      tier: 'Active Buyer',
-      isVip: false,
-      ordersCount: 6,
-      totalSpent: '₹ 32,800',
-      joinedDate: 'Mar 22, 2024'
-    },
-    {
-      id: 3,
-      name: 'Dr. Sarah Jenkins',
-      email: 'sarah.j@bioacademy.org',
-      phone: '+91 91234 56789',
-      initials: 'SJ',
-      tier: 'VIP Collector',
-      isVip: true,
-      ordersCount: 22,
-      totalSpent: '₹ 142,000',
-      joinedDate: 'Nov 04, 2023'
-    }
-  ]
-
-  const [customersData, setCustomersData] = useState(defaultCustomerList)
+  const [customersData, setCustomersData] = useState([])
 
   useEffect(() => {
     fetchLiveCustomers()
@@ -255,8 +215,15 @@ const Customers = () => {
 
         {/* Customer Table */}
         <div className="bg-white border border-[#E5E2DC] rounded-xl overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left font-hanken">
+          {filteredCustomers.length === 0 ? (
+            <div className="p-12 text-center flex flex-col items-center justify-center gap-2 bg-[#FAF8F5]">
+              <Users className="w-8 h-8 text-[#6E756F]" />
+              <p className="font-hanken font-bold text-sm text-[#1C1B1B]">No Customers Found</p>
+              <p className="font-hanken text-xs text-[#6E756F]">Your client list is clean. Registered members and purchasers will appear here.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-hanken">
               <thead>
                 <tr className="bg-[#FAF8F5] border-b border-[#E5E2DC]">
                   <th className="px-6 py-3.5 font-bold text-[10px] text-[#6E756F] uppercase tracking-wider">
@@ -337,6 +304,7 @@ const Customers = () => {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       </div>
     </div>

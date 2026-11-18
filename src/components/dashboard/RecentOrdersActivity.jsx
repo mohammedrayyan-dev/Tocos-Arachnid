@@ -3,31 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
 const RecentOrdersActivity = () => {
-  const defaultOrders = [
-    {
-      orderId: '#TA-89241',
-      customer: 'Elias Thorne',
-      species: 'Poecilotheria metallica',
-      price: '₹ 28,000',
-      status: 'Shipped'
-    },
-    {
-      orderId: '#TA-79142',
-      customer: 'Arjun Mehta',
-      species: 'Brachypelma hamorii',
-      price: '₹ 14,800',
-      status: 'Confirmed'
-    },
-    {
-      orderId: '#TA-65103',
-      customer: 'Dr. Sarah Jenkins',
-      species: 'Acanthoscurria geniculata',
-      price: '₹ 12,000',
-      status: 'Pending'
-    }
-  ]
-
-  const [recentOrders, setRecentOrders] = useState(defaultOrders)
+  const [recentOrders, setRecentOrders] = useState([])
 
   useEffect(() => {
     fetchRecentOrders()
@@ -41,7 +17,7 @@ const RecentOrdersActivity = () => {
         .order('created_at', { ascending: false })
         .limit(6)
 
-      if (!error && data && data.length > 0) {
+      if (!error && Array.isArray(data) && data.length > 0) {
         const mapped = data.map(o => {
           const rawId = o.id || o.order_id || o.orderId || '#TA-89241'
           const numTotal = typeof o.total_amount === 'number' ? o.total_amount : parseFloat(String(o.total_amount || o.rawTotalAmount || o.amount || 0).replace(/[^\d.]/g, ''))
@@ -60,9 +36,12 @@ const RecentOrdersActivity = () => {
           }
         })
         setRecentOrders(mapped)
+      } else {
+        setRecentOrders([])
       }
     } catch (e) {
       console.warn("DB recent orders fetch error:", e)
+      setRecentOrders([])
     }
   }
 
@@ -102,7 +81,14 @@ const RecentOrdersActivity = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E5E2DC]">
-            {recentOrders.map((order, idx) => (
+            {recentOrders.length === 0 ? (
+              <tr>
+                <td colSpan="5" className="py-8 text-center text-xs text-[#6E756F]">
+                  No recent orders yet. New purchases will appear here in real-time.
+                </td>
+              </tr>
+            ) : (
+              recentOrders.map((order, idx) => (
               <tr key={idx} className="hover:bg-gray-50/80 transition">
                 <td className="py-3.5 px-4 font-bold text-xs text-[#163422]">
                   {order.orderId}
@@ -130,7 +116,7 @@ const RecentOrdersActivity = () => {
                   </span>
                 </td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

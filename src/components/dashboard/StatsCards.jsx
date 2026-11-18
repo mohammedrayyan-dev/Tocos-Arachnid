@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { ShoppingCart, Banknote, Users, Package } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { isDummyProduct } from '../../data/productService'
 
 const StatsCards = () => {
   const [stats, setStats] = useState({
-    totalOrders: '14',
-    totalRevenue: '₹ 1,42,800',
-    totalCustomers: '28',
-    availableStock: '142 Units'
+    totalOrders: '0',
+    totalRevenue: '₹ 0',
+    totalCustomers: '0',
+    availableStock: '0 Units'
   })
 
   useEffect(() => {
@@ -73,20 +74,29 @@ const StatsCards = () => {
       // 3. Fetch Stock Sum from DB
       let stockSum = 0
       try {
-        const { data: products } = await supabase.from('products').select('stock')
-        if (products && products.length > 0) {
-          stockSum = products.reduce((acc, p) => acc + (p.stock || 0), 0)
-        } else {
-          stockSum = 63 // fallback
-        }
+        const { data: products } = await supabase.from('products').select('*')
+        const clientOnly = (products && Array.isArray(products)) ? products.filter(p => !isDummyProduct(p)) : []
+        
+        let localClientProducts = []
+        try {
+          const saved = localStorage.getItem('tocos_client_products')
+          if (saved) localClientProducts = JSON.parse(saved).filter(p => !isDummyProduct(p))
+        } catch (e) {}
+
+        const mergedMap = new Map()
+        clientOnly.forEach(p => mergedMap.set(String(p.id), p))
+        localClientProducts.forEach(p => mergedMap.set(String(p.id), p))
+
+        const allActive = Array.from(mergedMap.values())
+        stockSum = allActive.reduce((acc, p) => acc + (p.stock || 0), 0)
       } catch (e) {
-        stockSum = 63
+        stockSum = 0
       }
 
       setStats({
         totalOrders: combinedOrders.length.toLocaleString(),
         totalRevenue: `₹ ${totalRev.toLocaleString('en-IN')}`,
-        totalCustomers: customerCount ? customerCount.toLocaleString() : '5',
+        totalCustomers: customerCount ? customerCount.toLocaleString() : '0',
         availableStock: `${stockSum.toLocaleString()} Units`
       })
     } catch (e) {

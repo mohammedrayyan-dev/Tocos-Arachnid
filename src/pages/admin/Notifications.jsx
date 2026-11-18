@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import AdminSidebar from '../../components/admin/AdminSidebar'
-import { Bell, AlertTriangle, ShoppingCart, CheckCheck, Trash2, Check, UserPlus, RefreshCw } from 'lucide-react'
+import { Bell, AlertTriangle, ShoppingCart, CheckCheck, Trash2, Check, UserPlus, RefreshCw, Copy, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
+import { isDummyProduct } from '../../data/productService'
 
 const Notifications = () => {
+  const navigate = useNavigate()
   const [filter, setFilter] = useState('All')
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState([])
@@ -37,23 +40,47 @@ const Notifications = () => {
         if (dbOrders && dbOrders.length > 0) realOrders = dbOrders
       } catch (e) {}
 
-      // Convert orders to notifications
+      const extractUtr = (str) => {
+        if (!str) return ''
+        const match = String(str).match(/\b\d{12}\b/)
+        return match ? match[0] : ''
+      }
+      const utrMap = JSON.parse(localStorage.getItem('tocos_order_utrs') || '{}')
+
+      // Convert orders to notifications with live UTR verification
       realOrders.forEach((order) => {
         const id = `order_${order.id}`
         const amount = order.total_amount || order.totalAmount || order.amount || 0
         const customer = order.shipping_name || order.recipient || order.customer || 'Valued Customer'
         const dateStr = order.created_at ? new Date(order.created_at).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently'
         
+        const displayId = order.order_number 
+          ? `#TOC-${String(order.order_number).padStart(4, '0')}`
+          : `#TOC-${String(order.id).replace(/^#/, '').slice(0, 6).toUpperCase()}`
+
+        const orderUtr = utrMap[order.id] || (order.order_number ? utrMap[String(order.order_number)] : '') || order.utr_number || order.utrNumber || order.utr || extractUtr(order.payment_method) || extractUtr(order.shipping_landmark) || ''
+
+        const hasUtr = Boolean(orderUtr)
+        let alertTitle = `New Order Placed: ${displayId}`
+        let alertDesc = `${customer} placed an order totaling ₹ ${Number(amount).toLocaleString('en-IN')}. Status: ${order.status || 'Pending'}.`
+
+        if (hasUtr) {
+          alertTitle = `New Order & UPI Payment: ${displayId}`
+          alertDesc = `${customer} placed an order totaling ₹ ${Number(amount).toLocaleString('en-IN')}. Submitted UPI Transaction ID: ${orderUtr}. Awaiting concierge verification.`
+        }
+
         generatedAlerts.push({
           id: String(id),
-          title: `New Order Placed: #${String(order.id).slice(0, 12).toUpperCase()}`,
-          description: `${customer} placed an order totaling ₹ ${Number(amount).toLocaleString('en-IN')}. Status: ${order.status || 'Pending'}.`,
+          title: alertTitle,
+          description: alertDesc,
           type: 'order',
           time: dateStr,
           rawTimestamp: order.created_at ? new Date(order.created_at).getTime() : Date.now(),
           unread: !readIds.includes(String(id)),
           Icon: ShoppingCart,
-          iconBg: 'bg-[#EAF5ED] text-[#163422]'
+          iconBg: 'bg-[#EAF5ED] text-[#163422]',
+          utr: orderUtr,
+          orderId: displayId
         })
       })
 
@@ -61,15 +88,10 @@ const Notifications = () => {
       let lowStockProducts = []
       try {
         const { data: dbProducts } = await supabase.from('products').select('*').lte('stock', 5).limit(10)
-        if (dbProducts && dbProducts.length > 0) lowStockProducts = dbProducts
+        if (dbProducts && Array.isArray(dbProducts) && dbProducts.length > 0) {
+          lowStockProducts = dbProducts.filter(p => !isDummyProduct(p))
+        }
       } catch (e) {}
-
-      if (lowStockProducts.length === 0) {
-        lowStockProducts = [
-          { id: 'stock_p1', name: 'Poecilotheria metallica (Gooty Sapphire)', stock: 3 },
-          { id: 'stock_p2', name: 'Brachypelma hamorii (Mexican Red Knee)', stock: 1 }
-        ]
-      }
 
       lowStockProducts.forEach((prod) => {
         const id = `stock_${prod.id}`
@@ -319,6 +341,11 @@ const Notifications = () => {
                         <h3 className="font-bold text-sm text-[#163422]">
                           {notif.title}
                         </h3>
+                        {notif.utr && (
+                          <span className="bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded shadow-2xs">
+                            UTR: {notif.utr}
+                          </span>
+                        )}
                         {notif.unread && (
                           <span className="bg-[#163422] text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">
                             NEW
@@ -335,7 +362,32 @@ const Notifications = () => {
                   </div>
 
                   {/* Actions Right Side */}
-                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-gray-100 w-full sm:w-auto justify-end">
+                  <div className="flex flex-wrap items-center gap-2 self-end sm:self-center shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-gray-100 w-full sm:w-auto justify-end">
+                    {notif.type === 'order' && (
+                      <button
+                        onClick={() => navigate('/admin/orders')}
+                        className="px-3 py-1.5 bg-[#163422] hover:bg-[#0D2316] text-white rounded-md font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                        title="View & verify this order in Orders page"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Verify Order</span>
+                      </button>
+                    )}
+
+                    {notif.utr && (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(notif.utr)
+                          toast.success(`Copied UPI UTR ${notif.utr} to clipboard!`)
+                        }}
+                        className="px-2.5 py-1.5 bg-white border border-[#C2C8C0] text-[#163422] hover:bg-gray-50 rounded-md font-bold text-xs flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                        title="Copy UTR ID"
+                      >
+                        <Copy className="w-3 h-3 text-[#163422]" />
+                        <span>Copy UTR</span>
+                      </button>
+                    )}
+
                     {notif.unread ? (
                       <button
                         onClick={() => handleMarkAsRead(notif.id)}

@@ -101,9 +101,7 @@ const Analytics = () => {
       if (rankedSpecimens.length > 0) {
         setTopSellingSpecimens(rankedSpecimens)
       } else {
-        setTopSellingSpecimens([
-          { name: 'Climbing Branch Set', common: 'Terrarium Accessory', sold: '58 units', revenue: `₹ ${(totalRev || 962).toLocaleString('en-IN')}` }
-        ])
+        setTopSellingSpecimens([])
       }
 
       // Real category breakdown calculation from live order items
@@ -274,8 +272,13 @@ const Analytics = () => {
               Best-performing species by revenue generated
             </p>
 
-            <div className="divide-y divide-[#E5E2DC]">
-              {topSellingSpecimens.map((specimen, idx) => (
+            {topSellingSpecimens.length === 0 ? (
+              <div className="py-8 text-center text-xs text-[#6E756F]">
+                No sales data yet. Rankings will generate once purchases are completed.
+              </div>
+            ) : (
+              <div className="divide-y divide-[#E5E2DC]">
+                {topSellingSpecimens.map((specimen, idx) => (
                 <div key={idx} className="py-3.5 flex items-center justify-between">
                   <div>
                     <p className="font-bold text-sm text-[#163422]">
@@ -292,6 +295,7 @@ const Analytics = () => {
                 </div>
               ))}
             </div>
+            )}
           </div>
         </div>
       </div>

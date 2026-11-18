@@ -15,11 +15,7 @@ const getImageSrc = (name, rawImg) => {
 }
 
 const SpecimenOfMonth = () => {
-  const [specimen, setSpecimen] = useState({
-    name: 'Climbing Branch Set',
-    commonName: 'Top Ordered Item • 58 Units Sold',
-    image: beginnerTarantula
-  })
+  const [specimen, setSpecimen] = useState(null)
 
   useEffect(() => {
     fetchTopOrderedSpecimen()
@@ -109,6 +105,24 @@ const SpecimenOfMonth = () => {
     } catch (e) {
       console.warn('Top specimen fetch notice:', e)
     }
+  }
+
+  if (!specimen) {
+    return (
+      <div className="relative w-full h-57.5 overflow-hidden rounded-xl shadow-xs border border-[#E5E2DC] font-hanken bg-linear-to-br from-[#163422] to-[#244C33] p-6 flex flex-col justify-between text-white">
+        <span className="self-start bg-white/20 border border-white/30 backdrop-blur-xs text-[9px] font-hanken font-bold uppercase tracking-widest px-2.5 py-1 rounded">
+          SPECIMEN OF THE MONTH
+        </span>
+        <div>
+          <h3 className="font-libre text-xl font-bold text-white mb-1">
+            Conservatory Collection
+          </h3>
+          <p className="font-hanken text-xs text-white/80">
+            Top ordered specimens from live customer sales will automatically be highlighted here.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

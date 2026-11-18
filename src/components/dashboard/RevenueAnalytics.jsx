@@ -18,14 +18,14 @@ const RevenueAnalytics = () => {
     { month: 'May', revenue: 0 },
     { month: 'Jun', revenue: 0 },
     { month: 'Jul', revenue: 0 },
-    { month: 'Aug', revenue: 962 },
+    { month: 'Aug', revenue: 0 },
     { month: 'Sep', revenue: 0 },
     { month: 'Oct', revenue: 0 },
     { month: 'Nov', revenue: 0 },
     { month: 'Dec', revenue: 0 }
   ])
 
-  const [totalGrossRev, setTotalGrossRev] = useState(962)
+  const [totalGrossRev, setTotalGrossRev] = useState(0)
 
   useEffect(() => {
     fetchMonthlyRevenue()

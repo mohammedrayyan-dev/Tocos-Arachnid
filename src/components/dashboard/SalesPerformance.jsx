@@ -10,7 +10,7 @@ const parseAmountNumber = (val) => {
 }
 
 const SalesPerformance = () => {
-  const [currentRevenue, setCurrentRevenue] = useState(962)
+  const [currentRevenue, setCurrentRevenue] = useState(0)
   const targetRevenue = 50000 // Target 50K
 
   useEffect(() => {
@@ -57,7 +57,7 @@ const SalesPerformance = () => {
       const combinedOrders = Array.from(allOrdersMap.values())
       const totalRev = combinedOrders.reduce((sum, o) => sum + parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount), 0)
 
-      if (totalRev > 0) setCurrentRevenue(totalRev)
+      setCurrentRevenue(totalRev)
     } catch (e) {
       console.warn('Sales performance fetch notice:', e)
     }
