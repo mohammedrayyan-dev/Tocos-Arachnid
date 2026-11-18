@@ -1,7 +1,7 @@
 import { Clock, BadgeCheck, Truck, CheckCircle } from 'lucide-react'
 
 const OrderStats = ({ liveCounts, orders = [] }) => {
-  const pendingCount = liveCounts?.pending ?? orders.filter(o => o.status === 'Pending').length
+  const pendingCount = liveCounts?.pending ?? orders.filter(o => o.status === 'Pending' || o.status === 'placed').length
   const confirmedCount = liveCounts?.confirmed ?? orders.filter(o => o.status === 'Confirmed' || o.status === 'Processing' || o.status === 'Health Check').length
   const shippedCount = liveCounts?.shipped ?? orders.filter(o => o.status === 'Shipped').length
   const deliveredCount = liveCounts?.delivered ?? orders.filter(o => o.status === 'Delivered').length

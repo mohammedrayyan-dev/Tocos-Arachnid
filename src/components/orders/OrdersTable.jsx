@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 import OrderInvoiceModal from './OrderInvoiceModal'
 
-const OrdersTable = ({ orders, onSelectOrder, selectedOrderId, onOrdersUpdated }) => {
+const OrdersTable = ({ orders, onSelectOrder, selectedOrderId, onOrdersUpdated, onStatusChange }) => {
   const [ordersList, setOrdersList] = useState(orders || [])
   const [invoiceOrder, setInvoiceOrder] = useState(null)
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
@@ -13,17 +13,45 @@ const OrdersTable = ({ orders, onSelectOrder, selectedOrderId, onOrdersUpdated }
     setOrdersList(orders || [])
   }, [orders])
 
-  const handleStatusChange = async (orderId, newStatus) => {
-    const rawId = orderId.replace(/^#/, '')
-    setOrdersList(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o))
+  const handleStatusChange = async (targetOrderOrId, newStatus) => {
+    if (onStatusChange) {
+      await onStatusChange(targetOrderOrId, newStatus)
+      return
+    }
+
+    const orderObj = typeof targetOrderOrId === 'object'
+      ? targetOrderOrId
+      : ordersList.find(o => o.id === targetOrderOrId || o.rawId === targetOrderOrId)
+
+    const orderId = orderObj?.id || targetOrderOrId
+    const rawUuid = orderObj?.rawId
+    const orderNum = orderObj?.orderNumber
+
+    // Optimistic local state update
+    setOrdersList(prev => prev.map(o => (o.id === orderId || o.rawId === rawUuid) ? { ...o, status: newStatus } : o))
+
+    // Persist status override locally
+    try {
+      const overrides = JSON.parse(localStorage.getItem('tocos_order_status_overrides') || '{}')
+      if (rawUuid) overrides[rawUuid] = newStatus
+      if (orderId) overrides[orderId] = newStatus
+      if (orderNum) overrides[String(orderNum)] = newStatus
+      localStorage.setItem('tocos_order_status_overrides', JSON.stringify(overrides))
+      window.dispatchEvent(new Event('storage'))
+    } catch (e) {}
 
     try {
-      // Update Supabase
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: newStatus })
-        .eq('id', rawId)
+      // Update Supabase using real UUID or order_number
+      let updateQuery = supabase.from('orders').update({ status: newStatus })
+      if (rawUuid && rawUuid.includes('-') && rawUuid.length > 20) {
+        updateQuery = updateQuery.eq('id', rawUuid)
+      } else if (orderNum) {
+        updateQuery = updateQuery.eq('order_number', orderNum)
+      } else {
+        updateQuery = updateQuery.eq('id', rawUuid || orderId.replace(/^#/, ''))
+      }
 
+      const { error } = await updateQuery
       if (error) console.warn('Supabase order update notice:', error.message)
 
       toast.success(`Order ${orderId} updated to ${newStatus}! Reflects live on customer dashboard.`)
@@ -168,8 +196,8 @@ const OrdersTable = ({ orders, onSelectOrder, selectedOrderId, onOrdersUpdated }
                     <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                       <div className="relative inline-flex items-center gap-1">
                         <select
-                          value={order.status}
-                          onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                          value={order.status === 'placed' ? 'Pending' : order.status}
+                          onChange={(e) => handleStatusChange(order, e.target.value)}
                           className="font-hanken text-xs font-bold text-[#1C1B1B] bg-transparent border-none focus:outline-none cursor-pointer pr-4 appearance-none"
                         >
                           <option value="Pending">Order Initiated (Pending)</option>

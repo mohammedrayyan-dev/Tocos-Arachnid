@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, MessageSquare, Check, ChevronDown, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import OrderInvoiceModal from './OrderInvoiceModal'
@@ -21,14 +21,22 @@ const formatOrderDateTime = (dateInput, suffix = '') => {
   }
 }
 
-const OrderDetails = ({ order, onClose, onStatusChange }) => {
+const OrderDetails = ({ order, onClose, onStatusChange, onUtrUpdate }) => {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
+  const [isEditingUtr, setIsEditingUtr] = useState(false)
+  const [customUtr, setCustomUtr] = useState('')
+
+  useEffect(() => {
+    setCustomUtr(order?.utr_number || order?.utrNumber || order?.utr || '')
+    setIsEditingUtr(false)
+  }, [order?.id, order?.rawId, order?.utr_number])
 
   if (!order) return null
 
   const orderIdCode = order.id || '#TA-89241'
-  const currentStatus = order.status || 'Pending'
+  const currentStatus = order.status === 'placed' ? 'Pending' : (order.status || 'Pending')
   const firstName = order.customer?.split(' ')[0] || 'Customer'
+  const currentUtr = order.utr_number || order.utrNumber || order.utr || ''
 
   // Dynamic timeline status flags based on order.status
   const isConfirmedOrHigher = ['Confirmed', 'Health Check', 'Processing', 'Shipped', 'Delivered'].includes(currentStatus)
@@ -152,27 +160,76 @@ const OrderDetails = ({ order, onClose, onStatusChange }) => {
                 </span>
               </div>
 
-              <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-[#E5E2DC]">
-                <div>
-                  <p className="text-[10px] text-[#6E756F]">Submitted UPI Transaction ID</p>
-                  <p className="font-mono font-bold text-xs text-[#163422]">
-                    {order.utr_number || order.utrNumber || order.utr || 'Awaiting Verification'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    const utrToCopy = order.utr_number || order.utrNumber || order.utr || ''
-                    if (utrToCopy) {
-                      navigator.clipboard.writeText(utrToCopy)
-                      toast.success('Copied UPI Transaction ID to clipboard!')
-                    } else {
-                      toast.error('No UPI Transaction ID available to copy.')
-                    }
-                  }}
-                  className="px-2.5 py-1 bg-[#FAF8F5] hover:bg-gray-100 text-[#163422] text-[10px] font-bold rounded border border-[#E5E2DC] cursor-pointer"
-                >
-                  Copy ID
-                </button>
+              <div className="bg-white p-3 rounded-lg border border-[#E5E2DC]">
+                {isEditingUtr ? (
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-[#6E756F]">Enter 12-Digit UPI Transaction ID / UTR</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={customUtr}
+                        onChange={(e) => setCustomUtr(e.target.value.replace(/[^\w-]/g, ''))}
+                        placeholder="e.g. 324598127041"
+                        className="flex-1 px-2.5 py-1.5 text-xs font-mono font-bold border border-[#C2C8C0] rounded bg-[#FAF8F5] focus:outline-none focus:border-[#163422]"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => {
+                          if (!customUtr.trim()) {
+                            toast.error('Please enter a valid Transaction ID')
+                            return
+                          }
+                          if (onUtrUpdate) onUtrUpdate(order, customUtr.trim())
+                          setIsEditingUtr(false)
+                          toast.success('UPI Transaction ID updated successfully!')
+                        }}
+                        className="px-2.5 py-1.5 bg-[#163422] text-white text-[10px] font-bold rounded cursor-pointer"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCustomUtr(order.utr_number || order.utrNumber || order.utr || '')
+                          setIsEditingUtr(false)
+                        }}
+                        className="px-2 py-1.5 bg-gray-100 text-[#525B54] text-[10px] font-bold rounded cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-[10px] text-[#6E756F]">Submitted UPI Transaction ID</p>
+                      <p className="font-mono font-bold text-xs text-[#163422]">
+                        {currentUtr || 'Awaiting Verification'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => {
+                          if (currentUtr) {
+                            navigator.clipboard.writeText(currentUtr)
+                            toast.success(`Copied UPI UTR ${currentUtr} to clipboard!`)
+                          } else {
+                            toast.error('No UPI Transaction ID available to copy.')
+                          }
+                        }}
+                        className="px-2.5 py-1 bg-[#FAF8F5] hover:bg-gray-100 text-[#163422] text-[10px] font-bold rounded border border-[#E5E2DC] cursor-pointer"
+                      >
+                        Copy ID
+                      </button>
+                      <button
+                        onClick={() => setIsEditingUtr(true)}
+                        className="px-2 py-1 bg-white hover:bg-gray-50 text-[#525B54] hover:text-[#163422] text-[10px] font-bold rounded border border-[#E5E2DC] cursor-pointer"
+                        title="Edit / Enter UTR"
+                      >
+                        {currentUtr ? 'Edit' : '+ Set'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Admin Quick Verification Action Buttons */}
@@ -180,8 +237,8 @@ const OrderDetails = ({ order, onClose, onStatusChange }) => {
                 <div className="mt-3 pt-3 border-t border-[#E5E2DC] flex items-center gap-2">
                   <button
                     onClick={() => {
-                      if (onStatusChange) onStatusChange(order.id, 'Confirmed')
-                      toast.success(`Payment verified! Order ${order.id} is now Confirmed.`)
+                      if (onStatusChange) onStatusChange(order, 'Confirmed')
+                      toast.success(`Payment verified! Order ${orderIdCode} is now Confirmed.`)
                     }}
                     className="flex-1 py-2 bg-[#163422] hover:bg-[#0D2316] text-white text-[11px] font-bold rounded-md transition cursor-pointer text-center uppercase tracking-wider shadow-2xs"
                   >
@@ -189,8 +246,8 @@ const OrderDetails = ({ order, onClose, onStatusChange }) => {
                   </button>
                   <button
                     onClick={() => {
-                      if (onStatusChange) onStatusChange(order.id, 'Cancelled')
-                      toast.error(`Order ${order.id} marked Cancelled (Invalid UTR).`)
+                      if (onStatusChange) onStatusChange(order, 'Cancelled')
+                      toast.error(`Order ${orderIdCode} marked Cancelled (Invalid UTR).`)
                     }}
                     className="py-2 px-3 bg-[#FEF2F2] hover:bg-[#FEE2E2] text-[#991B1B] border border-[#FCA5A5] text-[11px] font-bold rounded-md transition cursor-pointer text-center uppercase tracking-wider shadow-2xs"
                   >

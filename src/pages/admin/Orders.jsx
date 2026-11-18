@@ -26,6 +26,18 @@ const Orders = () => {
     }
   }, [])
 
+  const normalizeStatus = (rawStatus) => {
+    if (!rawStatus) return 'Pending'
+    const s = String(rawStatus).trim().toLowerCase()
+    if (s === 'placed' || s === 'pending') return 'Pending'
+    if (s === 'confirmed' || s === 'processing') return 'Confirmed'
+    if (s === 'health check' || s === 'health_check') return 'Health Check'
+    if (s === 'shipped' || s === 'dispatched') return 'Shipped'
+    if (s === 'delivered') return 'Delivered'
+    if (s === 'cancelled' || s === 'canceled') return 'Cancelled'
+    return rawStatus
+  }
+
   const fetchLiveOrders = async () => {
     try {
       const { data, error } = await supabase
@@ -34,6 +46,16 @@ const Orders = () => {
         .order('created_at', { ascending: false })
 
       if (!error && data) {
+        // Load persistent local overrides (handles DB lag & custom UTR mappings)
+        const statusOverrides = JSON.parse(localStorage.getItem('tocos_order_status_overrides') || '{}')
+        const utrMap = JSON.parse(localStorage.getItem('tocos_order_utrs') || '{}')
+
+        const extractUtr = (str) => {
+          if (!str) return ''
+          const match = String(str).match(/\b\d{12}\b/)
+          return match ? match[0] : ''
+        }
+
         const mapped = data.map(o => {
           const customerName = o.shipping_name || o.customer_name || o.recipient || (o.email ? o.email.split('@')[0] : 'Customer')
           const initials = customerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
@@ -42,7 +64,14 @@ const Orders = () => {
             ? `#TOC-${String(o.order_number).padStart(4, '0')}`
             : `#TOC-${String(rawId).replace(/^#/, '').slice(0, 6).toUpperCase()}`
           const numTotal = typeof o.total_amount === 'number' ? o.total_amount : parseFloat(String(o.total_amount || 0).replace(/[^\d.]/g, ''))
-          const utrVal = o.utr_number || o.utrNumber || o.utr || ''
+
+          // Extract UTR from multiple reliable sources
+          const utrFromStore = utrMap[rawId] || utrMap[displayId] || (o.order_number ? utrMap[String(o.order_number)] : '')
+          const utrVal = utrFromStore || o.utr_number || o.utrNumber || o.utr || extractUtr(o.payment_method) || extractUtr(o.shipping_landmark) || ''
+
+          // Determine effective status (checking overrides first so status change never reverts)
+          const overrideStatus = statusOverrides[rawId] || statusOverrides[displayId] || (o.order_number ? statusOverrides[String(o.order_number)] : null)
+          const effectiveStatus = overrideStatus || normalizeStatus(o.status)
 
           return {
             id: displayId,
@@ -52,25 +81,26 @@ const Orders = () => {
             customerInitial: initials || 'C',
             amount: numTotal > 0 ? `₹ ${numTotal.toLocaleString('en-IN')}` : (o.total_amount || '₹ 0'),
             rawAmount: numTotal,
-            status: o.status || 'Pending',
-            email: o.email || 'Not provided',
-            phone: o.phone_number || 'Not provided',
+            status: effectiveStatus,
+            email: o.customer_email || o.email || 'Not provided',
+            phone: o.customer_phone || o.phone_number || 'Not provided',
             address: o.shipping_address || 'Address on file',
             city: o.shipping_city || '',
             zip: o.shipping_zip || '',
             items: o.items || [],
             utr_number: utrVal,
+            payment_method: o.payment_method || 'UPI',
             createdAt: o.created_at || new Date().toISOString()
           }
         })
 
         setOrdersList(mapped)
         if (mapped.length > 0) {
-          setSelectedOrder(prev => prev ? (mapped.find(item => item.id === prev.id) || mapped[0]) : mapped[0])
+          setSelectedOrder(prev => prev ? (mapped.find(item => item.id === prev.id || item.rawId === prev.rawId) || mapped[0]) : mapped[0])
         }
 
         const pendingCount = mapped.filter(o => o.status === 'Pending').length
-        const confirmedCount = mapped.filter(o => o.status === 'Confirmed' || o.status === 'Processing').length
+        const confirmedCount = mapped.filter(o => o.status === 'Confirmed' || o.status === 'Processing' || o.status === 'Health Check').length
         const shippedCount = mapped.filter(o => o.status === 'Shipped').length
         const deliveredCount = mapped.filter(o => o.status === 'Delivered').length
 
@@ -83,6 +113,83 @@ const Orders = () => {
       }
     } catch (e) {
       console.warn('Orders fetch error:', e)
+    }
+  }
+
+  const handleOrderStatusUpdate = async (targetOrderOrId, newStatus) => {
+    const target = typeof targetOrderOrId === 'object'
+      ? targetOrderOrId
+      : ordersList.find(o => o.id === targetOrderOrId || o.rawId === targetOrderOrId)
+
+    const displayId = target?.id || targetOrderOrId
+    const rawUuid = target?.rawId
+    const orderNum = target?.orderNumber
+
+    // 1. Instant optimistic state update
+    setOrdersList(prev => prev.map(o => (o.id === displayId || o.rawId === rawUuid) ? { ...o, status: newStatus } : o))
+    setSelectedOrder(prev => (prev && (prev.id === displayId || prev.rawId === rawUuid)) ? { ...prev, status: newStatus } : prev)
+
+    // 2. Persist to status overrides in localStorage so it never snaps back
+    try {
+      const overrides = JSON.parse(localStorage.getItem('tocos_order_status_overrides') || '{}')
+      if (rawUuid) overrides[rawUuid] = newStatus
+      if (displayId) overrides[displayId] = newStatus
+      if (orderNum) overrides[String(orderNum)] = newStatus
+      localStorage.setItem('tocos_order_status_overrides', JSON.stringify(overrides))
+      window.dispatchEvent(new Event('storage'))
+    } catch (e) {}
+
+    // 3. Persist update directly into Supabase via real UUID or order_number
+    try {
+      if (rawUuid && rawUuid.includes('-') && rawUuid.length > 20) {
+        const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', rawUuid)
+        if (error && orderNum) {
+          await supabase.from('orders').update({ status: newStatus }).eq('order_number', orderNum)
+        }
+      } else if (orderNum) {
+        await supabase.from('orders').update({ status: newStatus }).eq('order_number', orderNum)
+      }
+    } catch (e) {
+      console.error("Error updating order status in Supabase DB:", e)
+    }
+
+    fetchLiveOrders()
+  }
+
+  const handleUtrUpdate = async (targetOrderOrId, newUtr) => {
+    const target = typeof targetOrderOrId === 'object'
+      ? targetOrderOrId
+      : ordersList.find(o => o.id === targetOrderOrId || o.rawId === targetOrderOrId)
+
+    const displayId = target?.id || targetOrderOrId
+    const rawUuid = target?.rawId
+    const orderNum = target?.orderNumber
+    const cleanUtr = String(newUtr).trim()
+
+    // 1. Optimistic state update
+    setOrdersList(prev => prev.map(o => (o.id === displayId || o.rawId === rawUuid) ? { ...o, utr_number: cleanUtr } : o))
+    setSelectedOrder(prev => (prev && (prev.id === displayId || prev.rawId === rawUuid)) ? { ...prev, utr_number: cleanUtr } : prev)
+
+    // 2. Save to local storage UTR map
+    try {
+      const utrMap = JSON.parse(localStorage.getItem('tocos_order_utrs') || '{}')
+      if (rawUuid) utrMap[rawUuid] = cleanUtr
+      if (displayId) utrMap[displayId] = cleanUtr
+      if (orderNum) utrMap[String(orderNum)] = cleanUtr
+      localStorage.setItem('tocos_order_utrs', JSON.stringify(utrMap))
+      window.dispatchEvent(new Event('storage'))
+    } catch (e) {}
+
+    // 3. Persist into Supabase payment_method and shipping_landmark
+    try {
+      const paymentText = `UPI / UTR: ${cleanUtr}`
+      if (rawUuid && rawUuid.includes('-') && rawUuid.length > 20) {
+        await supabase.from('orders').update({ payment_method: paymentText }).eq('id', rawUuid)
+      } else if (orderNum) {
+        await supabase.from('orders').update({ payment_method: paymentText }).eq('order_number', orderNum)
+      }
+    } catch (e) {
+      console.error("Error updating UTR in Supabase:", e)
     }
   }
 
@@ -117,6 +224,7 @@ const Orders = () => {
               onSelectOrder={setSelectedOrder}
               selectedOrderId={selectedOrder?.id}
               onOrdersUpdated={fetchLiveOrders}
+              onStatusChange={handleOrderStatusUpdate}
             />
           </div>
 
@@ -125,19 +233,8 @@ const Orders = () => {
             <OrderDetails 
               order={selectedOrder}
               onClose={() => setSelectedOrder(null)}
-              onStatusChange={async (orderId, newStatus) => {
-                const rawId = orderId.replace(/^#/, '')
-                setOrdersList(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o))
-                setSelectedOrder(prev => prev ? { ...prev, status: newStatus } : null)
-
-                try {
-                  await supabase.from('orders').update({ status: newStatus }).eq('id', rawId)
-                } catch (e) {
-                  console.error("Error updating order status in Supabase DB:", e)
-                }
-
-                fetchLiveOrders()
-              }}
+              onStatusChange={handleOrderStatusUpdate}
+              onUtrUpdate={handleUtrUpdate}
             />
           )}
         </div>

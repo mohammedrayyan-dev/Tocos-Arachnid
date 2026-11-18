@@ -194,9 +194,9 @@ const QRPayment = () => {
                     shipping_city: orderData.shippingDetails?.city_state || orderData.shippingDetails?.city || 'Bengaluru',
                     shipping_state: orderData.shippingDetails?.state || 'Karnataka',
                     shipping_zip: orderData.shippingDetails?.postal_code || orderData.shippingDetails?.zip || '560001',
-                    shipping_landmark: orderData.shippingDetails?.landmark || 'Near Landmark',
+                    shipping_landmark: orderData.shippingDetails?.landmark ? `${orderData.shippingDetails.landmark} (UTR: ${cleanUtr})` : `UTR: ${cleanUtr}`,
                     total_amount: calculatedNumeric,
-                    payment_method: 'UPI / Razorpay',
+                    payment_method: cleanUtr ? `UPI / UTR: ${cleanUtr}` : 'UPI / Razorpay',
                     status: 'placed'
                 }
 
@@ -208,20 +208,34 @@ const QRPayment = () => {
 
                 if (orderErr) {
                     console.error("Supabase order insert error:", orderErr)
-                } else if (insertedOrder?.id && orderData.items?.length > 0) {
-                    const orderItemsPayload = orderData.items.map(item => ({
-                        order_id: insertedOrder.id,
-                        product_id: item.id || item.product_id,
-                        quantity: Number(item.quantity) || 1,
-                        price_at_purchase: Number(item.price || item.discounted_price || 0)
-                    }))
+                } else if (insertedOrder?.id) {
+                    // Record UTR mapping locally for instant cross-tab access
+                    try {
+                        const utrMap = JSON.parse(localStorage.getItem('tocos_order_utrs') || '{}')
+                        utrMap[insertedOrder.id] = cleanUtr
+                        if (insertedOrder.order_number) {
+                            utrMap[String(insertedOrder.order_number)] = cleanUtr
+                            utrMap[`#TOC-${String(insertedOrder.order_number).padStart(4, '0')}`] = cleanUtr
+                        }
+                        localStorage.setItem('tocos_order_utrs', JSON.stringify(utrMap))
+                        window.dispatchEvent(new Event('storage'))
+                    } catch (e) {}
 
-                    const { error: itemsErr } = await supabase
-                        .from('order_items')
-                        .insert(orderItemsPayload)
+                    if (orderData.items?.length > 0) {
+                        const orderItemsPayload = orderData.items.map(item => ({
+                            order_id: insertedOrder.id,
+                            product_id: item.id || item.product_id,
+                            quantity: Number(item.quantity) || 1,
+                            price_at_purchase: Number(item.price || item.discounted_price || 0)
+                        }))
 
-                    if (itemsErr) {
-                        console.warn("Supabase order_items insert warning:", itemsErr)
+                        const { error: itemsErr } = await supabase
+                            .from('order_items')
+                            .insert(orderItemsPayload)
+
+                        if (itemsErr) {
+                            console.warn("Supabase order_items insert warning:", itemsErr)
+                        }
                     }
                 }
             } catch (dbErr) {
@@ -231,7 +245,18 @@ const QRPayment = () => {
             if (clearCart) clearCart()
 
             toast.success('Payment verified & order recorded!')
-            navigate('/payment-success', { state: { orderData: { ...orderData, totalAmount: displayTotalAmount, items: orderData.items || [] } } })
+            navigate('/payment-success', { 
+                state: { 
+                    orderData: { 
+                        ...orderData, 
+                        utr_number: cleanUtr,
+                        utrNumber: cleanUtr,
+                        utr: cleanUtr,
+                        totalAmount: displayTotalAmount, 
+                        items: orderData.items || [] 
+                    } 
+                } 
+            })
         } catch (err) {
             console.error("Payment verification error:", err)
             toast.error("An error occurred during verification")

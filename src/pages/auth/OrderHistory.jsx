@@ -42,6 +42,40 @@ const OrderHistory = () => {
   const [loading, setLoading] = useState(true)
   const [showDetailsModal, setShowDetailsModal] = useState(null)
   const [showTrackingModal, setShowTrackingModal] = useState(null)
+  const [isEditingUserUtr, setIsEditingUserUtr] = useState(false)
+  const [userUtrInput, setUserUtrInput] = useState('')
+
+  const handleCustomerSubmitUtr = async (order) => {
+    const clean = userUtrInput.replace(/\D/g, '')
+    if (!clean || clean.length !== 12) {
+      toast.error('Please enter an exact 12-digit numeric UPI Transaction ID')
+      return
+    }
+
+    try {
+      const paymentText = `UPI / UTR: ${clean}`
+      if (order.rawId && order.rawId.includes('-') && order.rawId.length > 20) {
+        await supabase.from('orders').update({ payment_method: paymentText }).eq('id', order.rawId)
+      } else if (order.orderNumber) {
+        await supabase.from('orders').update({ payment_method: paymentText }).eq('order_number', order.orderNumber)
+      }
+
+      const utrMap = JSON.parse(localStorage.getItem('tocos_order_utrs') || '{}')
+      if (order.rawId) utrMap[order.rawId] = clean
+      if (order.id) utrMap[order.id] = clean
+      if (order.orderNumber) utrMap[String(order.orderNumber)] = clean
+      localStorage.setItem('tocos_order_utrs', JSON.stringify(utrMap))
+      window.dispatchEvent(new Event('storage'))
+
+      setShowDetailsModal(prev => prev ? { ...prev, utrNumber: clean } : null)
+      setIsEditingUserUtr(false)
+      setUserUtrInput('')
+      toast.success('UPI Transaction ID submitted! Reflects live on concierge admin dashboard.')
+      fetchUserLiveOrders()
+    } catch (e) {
+      toast.error('Failed to submit UTR. Please try again.')
+    }
+  }
 
   useEffect(() => {
     if (authLoading) return
@@ -114,6 +148,14 @@ const OrderHistory = () => {
       })
 
       const combinedList = Array.from(combinedMap.values())
+      const statusOverrides = JSON.parse(localStorage.getItem('tocos_order_status_overrides') || '{}')
+      const utrMap = JSON.parse(localStorage.getItem('tocos_order_utrs') || '{}')
+
+      const extractUtr = (str) => {
+        if (!str) return ''
+        const m = String(str).match(/\b\d{12}\b/)
+        return m ? m[0] : ''
+      }
 
       const mapped = combinedList.map(o => {
         const rawAmt = o.total_amount || o.amount || o.rawTotalAmount || 0
@@ -124,6 +166,13 @@ const OrderHistory = () => {
           ? `#TOC-${String(o.order_number).padStart(4, '0')}`
           : `#TOC-${String(rawId).replace(/^#/, '').slice(0, 6).toUpperCase()}`
 
+        const overrideStatus = statusOverrides[rawId] || statusOverrides[shortOrderId] || (o.order_number ? statusOverrides[String(o.order_number)] : null)
+        let resolvedStatus = overrideStatus || o.status || 'Pending'
+        if (resolvedStatus.toLowerCase() === 'placed') resolvedStatus = 'Pending'
+
+        const utrFromStore = utrMap[rawId] || utrMap[shortOrderId] || (o.order_number ? utrMap[String(o.order_number)] : '')
+        const resolvedUtr = utrFromStore || o.utr_number || o.utrNumber || o.utr || extractUtr(o.payment_method) || extractUtr(o.shipping_landmark) || 'Verified'
+
         return {
           id: shortOrderId,
           rawId: rawId,
@@ -133,8 +182,8 @@ const OrderHistory = () => {
           rawCreatedAt: o.created_at || new Date().toISOString(),
           totalPrice: displayPrice,
           numericPrice: numericPrice,
-          status: o.status || 'Pending',
-          utrNumber: o.utr_number || o.utrNumber || o.utr || 'Verified',
+          status: resolvedStatus,
+          utrNumber: resolvedUtr,
           address: o.shipping_address || 'Address on file',
           items: Array.isArray(o.items) && o.items.length ? o.items : [
             {
@@ -371,13 +420,52 @@ const OrderHistory = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 font-hanken">
           <div className="bg-white rounded-xl max-w-lg w-full p-6 border border-[#E5E2DC] shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center pb-4 border-b border-[#E5E2DC]">
-              <div>
+              <div className="flex-1 min-w-0 pr-2">
                 <h3 className="font-libre text-xl font-bold text-[#163422]">
                   Order Details ({showDetailsModal.id})
                 </h3>
-                <p className="text-[11px] text-[#6E756F]">
-                  UPI Transaction ID: <span className="font-mono font-bold text-[#163422]">{showDetailsModal.utrNumber}</span>
-                </p>
+                {isEditingUserUtr ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={userUtrInput}
+                      onChange={(e) => setUserUtrInput(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                      placeholder="12-digit UPI UTR"
+                      maxLength={12}
+                      className="px-2.5 py-1 text-xs font-mono font-bold border border-[#C2C8C0] rounded bg-[#FAF8F5] focus:outline-none focus:border-[#163422] w-36"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleCustomerSubmitUtr(showDetailsModal)}
+                      className="px-2.5 py-1 bg-[#163422] text-white text-[11px] font-bold rounded cursor-pointer"
+                    >
+                      Submit UTR
+                    </button>
+                    <button
+                      onClick={() => { setIsEditingUserUtr(false); setUserUtrInput('') }}
+                      className="px-2 py-1 bg-gray-100 text-[#525B54] text-[11px] font-bold rounded cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-[11px] text-[#6E756F]">
+                      UPI Transaction ID:{' '}
+                      <span className="font-mono font-bold text-[#163422]">
+                        {showDetailsModal.utrNumber || 'Awaiting Submission'}
+                      </span>
+                    </p>
+                    {(!showDetailsModal.utrNumber || !/^\d{12}$/.test(showDetailsModal.utrNumber)) && (
+                      <button
+                        onClick={() => { setIsEditingUserUtr(true); setUserUtrInput('') }}
+                        className="text-[10px] text-[#163422] font-bold underline cursor-pointer hover:text-black"
+                      >
+                        + Submit UTR
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <button 
                 onClick={() => setShowDetailsModal(null)}
