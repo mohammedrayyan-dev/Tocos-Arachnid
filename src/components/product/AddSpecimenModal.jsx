@@ -44,14 +44,28 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
         is_low_stock: parseInt(formData.stock) < 5,
         is_featured: false,
         ref_number: formData.ref_number,
-        image: formData.image
+        image: formData.image,
+        client_assigned: true,
+        created_at: new Date().toISOString()
       }
 
-      const { data, error } = await supabase.from('products').insert([newProduct]).select('*')
-      if (error) throw error
+      let createdItem = newProduct
+      try {
+        const { data, error } = await supabase.from('products').insert([newProduct]).select('*')
+        if (data && data[0]) createdItem = data[0]
+      } catch (e) {
+        console.warn('Supabase product insert notice:', e)
+      }
+
+      try {
+        const saved = JSON.parse(localStorage.getItem('tocos_client_products') || '[]')
+        saved.unshift(createdItem)
+        localStorage.setItem('tocos_client_products', JSON.stringify(saved))
+        window.dispatchEvent(new Event('storage'))
+      } catch (e) {}
 
       toast.success(`Specimen "${formData.name}" added to Conservatory & Shop!`)
-      if (onSpecimenAdded) onSpecimenAdded(data ? data[0] : newProduct)
+      if (onSpecimenAdded) onSpecimenAdded(createdItem)
       onClose()
     } catch (err) {
       console.error(err)

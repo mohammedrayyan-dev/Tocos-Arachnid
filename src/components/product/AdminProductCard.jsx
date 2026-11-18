@@ -1,4 +1,6 @@
-const AdminProductCard = ({ product, isSelected }) => {
+import { Trash2 } from 'lucide-react'
+
+const AdminProductCard = ({ product, isSelected, onDelete }) => {
   const {
     image,
     isFeatured,
@@ -13,7 +15,7 @@ const AdminProductCard = ({ product, isSelected }) => {
   } = product
 
   return (
-    <div className={`bg-white rounded-xl overflow-hidden transition duration-200 flex flex-col justify-between ${
+    <div className={`bg-white rounded-xl overflow-hidden transition duration-200 flex flex-col justify-between group ${
       isSelected 
         ? 'border-2 border-blue-500 shadow-md ring-2 ring-blue-100' 
         : 'border border-[#E5E2DC] shadow-2xs hover:shadow-xs'
@@ -47,6 +49,20 @@ const AdminProductCard = ({ product, isSelected }) => {
               </span>
             )}
           </div>
+
+          {/* Top Right Quick Delete Action */}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(product)
+              }}
+              title="Delete Specimen"
+              className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/90 hover:bg-red-50 text-gray-500 hover:text-red-600 transition shadow-xs cursor-pointer opacity-80 group-hover:opacity-100"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Card Content */}
@@ -75,9 +91,11 @@ const AdminProductCard = ({ product, isSelected }) => {
           </span>
         </div>
 
-        <span className="font-hanken text-[10px] text-[#6E756F]">
-          Ref: {refNumber}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-hanken text-[10px] text-[#6E756F]">
+            Ref: {refNumber}
+          </span>
+        </div>
       </div>
     </div>
   )
