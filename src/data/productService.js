@@ -7,212 +7,7 @@ import isopodsCare from "../assets/image/isopods-care.webp"
 import millipedeCare from "../assets/image/millipede-care.webp"
 import heroImage from "../assets/image/hero-image.webp"
 
-const FULL_PRODUCT_CATALOG = [
-  {
-    id: "p-1",
-    slug: "poecilotheria-metallica",
-    name: "Poecilotheria metallica",
-    scientific_name: "P. metallica",
-    common_name: "Gooty Sapphire Ornamental • Juvenile Female",
-    price: 28000,
-    thumbnail: beginnerTarantula,
-    image: beginnerTarantula,
-    category: "Tarantulas",
-    sub_category: "Arboreal",
-    origin_tag: "OLD WORLD",
-    temperament: "Defensive",
-    in_stock: true,
-    featured: "Collectors Choice",
-    care_level: "Best for Collectors"
-  },
-  {
-    id: "p-2",
-    slug: "brachypelma-hamorii",
-    name: "Brachypelma hamorii",
-    scientific_name: "B. hamorii",
-    common_name: "Mexican Red Knee • Sub-Adult Male",
-    price: 14800,
-    thumbnail: mexicanRedKnee,
-    image: mexicanRedKnee,
-    category: "Tarantulas",
-    sub_category: "Terrestrial",
-    origin_tag: "NEW WORLD",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "Recommended Beginner",
-    care_level: "Best for Beginners"
-  },
-  {
-    id: "p-3",
-    slug: "grammostola-pulchra",
-    name: "Grammostola pulchra",
-    scientific_name: "G. pulchra",
-    common_name: "Brazilian Black • Sling (0.5\")",
-    price: 14500,
-    thumbnail: brazilianBlack,
-    image: brazilianBlack,
-    category: "Tarantulas",
-    sub_category: "Terrestrial",
-    origin_tag: "NEW WORLD",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "Recommended Beginner",
-    care_level: "Best for Beginners"
-  },
-  {
-    id: "p-4",
-    slug: "acanthoscurria-geniculata",
-    name: "Acanthoscurria geniculata",
-    scientific_name: "A. geniculata",
-    common_name: "Brazilian Whiteknee • Sling (0.5\")",
-    price: 12000,
-    thumbnail: beginnerTarantula,
-    image: beginnerTarantula,
-    category: "Tarantulas",
-    sub_category: "Terrestrial",
-    origin_tag: "NEW WORLD",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "Recommended Beginner",
-    care_level: "Best for Beginners"
-  },
-  {
-    id: "p-5",
-    slug: "chromatopelma-cyaneopubescens",
-    name: "Chromatopelma cyaneopubescens",
-    scientific_name: "C. cyaneopubescens",
-    common_name: "Greenbottle Blue (GBB) • Juvenile",
-    price: 16500,
-    thumbnail: mexicanRedKnee,
-    image: mexicanRedKnee,
-    category: "Tarantulas",
-    sub_category: "Terrestrial",
-    origin_tag: "NEW WORLD",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "Collectors Choice",
-    care_level: "Best for Collectors"
-  },
-  {
-    id: "p-6",
-    slug: "caribena-versicolor",
-    name: "Caribena versicolor",
-    scientific_name: "C. versicolor",
-    common_name: "Antilles Pinktoe • Sling",
-    price: 18000,
-    thumbnail: brazilianBlack,
-    image: brazilianBlack,
-    category: "Tarantulas",
-    sub_category: "Arboreal",
-    origin_tag: "NEW WORLD",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "Recommended Beginner",
-    care_level: "Best for Beginners"
-  },
-  {
-    id: "p-7",
-    slug: "pacman-frog-ornate",
-    name: "Ornate Pacman Frog",
-    scientific_name: "Ceratophrys cranwelli",
-    common_name: "South American Horned Frog",
-    price: 8500,
-    thumbnail: isopodsCare,
-    image: isopodsCare,
-    category: "Tailless Amphibians",
-    sub_category: "Pacman",
-    origin_tag: "NEW WORLD",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "New Arrivals",
-    care_level: "Best for Beginners"
-  },
-  {
-    id: "p-8",
-    slug: "whites-tree-frog",
-    name: "Whites Tree Frog",
-    scientific_name: "Litoria caerulea",
-    common_name: "Dumpy Tree Frog",
-    price: 6200,
-    thumbnail: millipedeCare,
-    image: millipedeCare,
-    category: "Tailless Amphibians",
-    sub_category: "Tree Frog",
-    origin_tag: "OLD WORLD",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "Recommended Beginner",
-    care_level: "Best for Beginners"
-  },
-  {
-    id: "p-9",
-    slug: "king-snake-black",
-    name: "Mexican Black King Snake",
-    scientific_name: "Lampropeltis getula nigrita",
-    common_name: "Jet Black Kingsnake",
-    price: 24000,
-    thumbnail: heroImage,
-    image: heroImage,
-    category: "Reptiles",
-    sub_category: "Snakes",
-    origin_tag: "NEW WORLD",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "Collectors Choice",
-    care_level: "Best for Collectors"
-  },
-  {
-    id: "p-10",
-    slug: "acrylic-enclosure-locking",
-    name: "Acrylic Enclosure with Locking Door",
-    scientific_name: "Toco Specimen Habitat",
-    common_name: "Cross-Ventilated Acrylic Terrarium (20x20x30 cm)",
-    price: 5800,
-    thumbnail: bioactiveMasterclass,
-    image: bioactiveMasterclass,
-    category: "Enclosure",
-    sub_category: "Full Enclosure in Acrylic",
-    origin_tag: "ACCESSORY",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "New Arrivals",
-    care_level: "Best for Beginners"
-  },
-  {
-    id: "p-11",
-    slug: "glass-enclosure-front-opening",
-    name: "Bioactive Glass Terrarium",
-    scientific_name: "Glass Crib Habitat",
-    common_name: "Front Opening Glass Enclosure (30x30x45 cm)",
-    price: 9500,
-    thumbnail: bioactiveMasterclass,
-    image: bioactiveMasterclass,
-    category: "Enclosure",
-    sub_category: "Full Enclosure in Glass",
-    origin_tag: "ACCESSORY",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "Collectors Choice",
-    care_level: "Best for Collectors"
-  },
-  {
-    id: "p-12",
-    slug: "bioactive-substrate-mix",
-    name: "Bioactive Substrate Mix (5L)",
-    scientific_name: "Organic Substrate Blend",
-    common_name: "Coco Coir & Sphagnum Moss Substrate",
-    price: 1450,
-    thumbnail: millipedeCare,
-    image: millipedeCare,
-    category: "Enclosure",
-    sub_category: "Substrates",
-    origin_tag: "ACCESSORY",
-    temperament: "Docile",
-    in_stock: true,
-    featured: "Recommended Beginner",
-    care_level: "Best for Beginners"
-  }
-]
+const FULL_PRODUCT_CATALOG = []
 
 const resolveProductImage = (product) => {
   const thumb = product.thumbnail || product.image
@@ -264,11 +59,58 @@ const categorizeProduct = (p) => {
     }
 }
 
+export const isDummyProduct = (p) => {
+    if (!p) return true
+    const createdAt = String(p.created_at || '')
+    // Batch test seed products from June 2026
+    if (createdAt.startsWith('2026-06-21') || createdAt.startsWith('2026-06-22') || createdAt.startsWith('2026-06-')) {
+        return true
+    }
+    // Placeholder image URLs from dummy seeding
+    if (typeof p.image === 'string' && (p.image.includes('placehold.co') || p.image.includes('400x400') || p.image.includes('400%20x%20400'))) {
+        return true
+    }
+    if (typeof p.thumbnail === 'string' && (p.thumbnail.includes('placehold.co') || p.thumbnail.includes('400x400') || p.thumbnail.includes('400%20x%20400'))) {
+        return true
+    }
+    // Known test names seeded without proper origin
+    const name = String(p.name || '').toLowerCase()
+    if (name === 'misting bottle' || name === 'springtails (culture)' || name.startsWith('water dish') || name.startsWith('glass terrarium')) {
+        if (!p.client_assigned && (!createdAt || createdAt.startsWith('2026-06-'))) return true
+    }
+    return false
+}
+
 export const getAllProducts = async (retries = 2) => {
     try {
         const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false })
-        if (!error && data && data.length > 0) {
-            return data.map(p => {
+        if (!error && Array.isArray(data)) {
+            // Filter out dummy seed products
+            const clientOnly = data.filter(p => !isDummyProduct(p))
+
+            // Background purge dummy items in Supabase if admin is logged in
+            const dummyIds = data.filter(p => isDummyProduct(p)).map(p => p.id)
+            if (dummyIds.length > 0) {
+                try {
+                    supabase.from('products').delete().in('id', dummyIds).then(() => {}).catch(() => {})
+                } catch (e) {}
+            }
+
+            // Check for locally assigned client products
+            let localClientProducts = []
+            try {
+                const saved = localStorage.getItem('tocos_client_products')
+                if (saved) {
+                    localClientProducts = JSON.parse(saved).filter(p => !isDummyProduct(p))
+                }
+            } catch (e) {}
+
+            const mergedMap = new Map()
+            clientOnly.forEach(p => mergedMap.set(String(p.id), p))
+            localClientProducts.forEach(p => mergedMap.set(String(p.id), p))
+
+            const finalItems = Array.from(mergedMap.values())
+            return finalItems.map(p => {
                 const resolvedImg = resolveProductImage(p)
                 const priceNum = Number(p.price) || 0
                 const formatted = {
@@ -300,8 +142,20 @@ export const getAllProducts = async (retries = 2) => {
         })
         if (res.ok) {
             const data = await res.json()
-            if (Array.isArray(data) && data.length > 0) {
-                return data.map(p => {
+            if (Array.isArray(data)) {
+                const clientOnly = data.filter(p => !isDummyProduct(p))
+                let localClientProducts = []
+                try {
+                    const saved = localStorage.getItem('tocos_client_products')
+                    if (saved) localClientProducts = JSON.parse(saved).filter(p => !isDummyProduct(p))
+                } catch (e) {}
+
+                const mergedMap = new Map()
+                clientOnly.forEach(p => mergedMap.set(String(p.id), p))
+                localClientProducts.forEach(p => mergedMap.set(String(p.id), p))
+
+                const finalItems = Array.from(mergedMap.values())
+                return finalItems.map(p => {
                     const resolvedImg = resolveProductImage(p)
                     const priceNum = Number(p.price) || 0
                     const formatted = {
@@ -324,7 +178,29 @@ export const getAllProducts = async (retries = 2) => {
         return getAllProducts(retries - 1)
     }
 
-    return FULL_PRODUCT_CATALOG.map(categorizeProduct)
+    // Check localStorage fallback for client products
+    try {
+        const saved = localStorage.getItem('tocos_client_products')
+        if (saved) {
+            const parsed = JSON.parse(saved).filter(p => !isDummyProduct(p))
+            if (parsed.length > 0) {
+                return parsed.map(p => {
+                    const resolvedImg = resolveProductImage(p)
+                    const priceNum = Number(p.price) || 0
+                    const formatted = {
+                        ...p,
+                        price: priceNum,
+                        thumbnail: resolvedImg,
+                        image: resolvedImg,
+                        in_stock: p.in_stock !== false && (p.stock === undefined || p.stock === null || Number(p.stock) > 0)
+                    }
+                    return categorizeProduct(formatted)
+                })
+            }
+        }
+    } catch (e) {}
+
+    return []
 }
 
 export const getProductBySlug = async (slug) => {
@@ -364,7 +240,7 @@ export const getProductsByCategory = async (category) => {
         return cat.includes(search) || search.includes(cat) || sub.includes(search) || name.includes(search) || desc.includes(search)
     })
 
-    return matched.length > 0 ? matched : all
+    return matched
 }
 
 export const getProductsBySubCategory = async (subCategory) => {
@@ -398,7 +274,7 @@ export const getProductsBySubCategory = async (subCategory) => {
         )
     })
 
-    return matched.length > 0 ? matched : all
+    return matched
 }
 
 export const searchProducts = async (query) => {
@@ -434,8 +310,7 @@ export const getFeaturedByType = async (type, limit = 4) => {
         )
     })
 
-    const result = matched.length > 0 ? matched : all
-    return result.slice(0, limit)
+    return matched.slice(0, limit)
 }
 
 export const getAllFeaturedByType = async (type) => {
@@ -456,7 +331,7 @@ export const getAllFeaturedByType = async (type) => {
         )
     })
 
-    return matched.length > 0 ? matched : all
+    return matched
 }
 
 export const addProduct = async (product) => {

@@ -1,65 +1,16 @@
 import { useState, useEffect } from 'react'
-import { MoreVertical, Tag } from 'lucide-react'
+import { MoreVertical, Tag, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
 import EditStockModal from './EditStockModal'
-import mexicanRedKnee from '../../assets/image/mexican-red-knee.webp'
+import { isDummyProduct } from '../../data/productService'
 import beginnerTarantula from '../../assets/image/beginner-tarantula-care.webp'
-import brazilianBlack from '../../assets/image/brazilian-black.webp'
 
 const InventoryTable = () => {
   const [availability, setAvailability] = useState({})
   const [openActionId, setOpenActionId] = useState(null)
   const [editingItem, setEditingItem] = useState(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-
-  const initialItems = [
-    {
-      id: 1,
-      thumbnail: mexicanRedKnee,
-      species: 'Brachypelma hamorii',
-      commonName: 'Mexican Red Knee • New World',
-      category: 'Terrestrial',
-      stockStatus: '42 in Stock',
-      stockCount: 42,
-      isLowStock: false,
-      price: '₹ 10,000',
-      rawPrice: 10000,
-      mrpPrice: 12000,
-      hasDiscount: true,
-      discountPercent: 16
-    },
-    {
-      id: 2,
-      thumbnail: beginnerTarantula,
-      species: 'Poecilotheria metallica',
-      commonName: 'Gooty Sapphire • Old World',
-      category: 'Arboreal',
-      stockStatus: '3 Left (Low)',
-      stockCount: 3,
-      isLowStock: true,
-      price: '₹ 28,000',
-      rawPrice: 28000,
-      mrpPrice: 28000,
-      hasDiscount: false
-    },
-    {
-      id: 3,
-      thumbnail: brazilianBlack,
-      species: 'Grammostola pulchra',
-      commonName: 'Brazilian Black • New World',
-      category: 'Terrestrial',
-      stockStatus: '18 in Stock',
-      stockCount: 18,
-      isLowStock: false,
-      price: '₹ 14,500',
-      rawPrice: 14500,
-      mrpPrice: 16000,
-      hasDiscount: true,
-      discountPercent: 9
-    }
-  ]
-
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState([])
 
@@ -73,8 +24,25 @@ const InventoryTable = () => {
       const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false })
       if (error) console.error('Fetch inventory error:', error)
 
-      if (data && data.length > 0) {
-        const mapped = data.map(p => {
+      const clientOnly = (data && Array.isArray(data)) ? data.filter(p => !isDummyProduct(p)) : []
+
+      // Also load locally assigned client products
+      let localClientProducts = []
+      try {
+        const saved = localStorage.getItem('tocos_client_products')
+        if (saved) {
+          localClientProducts = JSON.parse(saved).filter(p => !isDummyProduct(p))
+        }
+      } catch (e) {}
+
+      const mergedMap = new Map()
+      clientOnly.forEach(p => mergedMap.set(String(p.id), p))
+      localClientProducts.forEach(p => mergedMap.set(String(p.id), p))
+
+      const finalData = Array.from(mergedMap.values())
+
+      if (finalData.length > 0) {
+        const mapped = finalData.map(p => {
           const priceVal = typeof p.price === 'number' ? p.price : parseFloat(String(p.price).replace(/\D/g, '') || '0')
           const mrpVal = (p.original_price && p.original_price > priceVal) ? p.original_price : priceVal
           const savingsVal = mrpVal - priceVal
@@ -101,10 +69,11 @@ const InventoryTable = () => {
         })
         setItems(mapped)
       } else {
-        setItems(initialItems)
+        setItems([])
       }
     } catch (e) {
-      console.warn('Using local fallback state for inventory', e)
+      console.warn('Inventory fetch notice:', e)
+      setItems([])
     } finally {
       setLoading(false)
     }
@@ -143,19 +112,33 @@ const InventoryTable = () => {
   const handleDeleteItem = async (id, species) => {
     try {
       await supabase.from('products').delete().eq('id', id)
-      setItems(prev => prev.filter(i => i.id !== id))
-      toast.success(`Removed ${species} from inventory`)
-    } catch (e) {
-      setItems(prev => prev.filter(i => i.id !== id))
-      toast.success(`Removed ${species} from inventory`)
-    }
+    } catch (e) {}
+
+    try {
+      const saved = localStorage.getItem('tocos_client_products')
+      if (saved) {
+        const filtered = JSON.parse(saved).filter(i => i.id !== id)
+        localStorage.setItem('tocos_client_products', JSON.stringify(filtered))
+        window.dispatchEvent(new Event('storage'))
+      }
+    } catch (e) {}
+
+    setItems(prev => prev.filter(i => i.id !== id))
+    toast.success(`Removed ${species} from inventory`)
     setOpenActionId(null)
   }
 
   return (
     <div className="bg-white border border-[#E5E2DC] rounded-xl overflow-hidden shadow-xs font-hanken">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left font-hanken">
+      {items.length === 0 && !loading ? (
+        <div className="p-12 text-center flex flex-col items-center justify-center gap-2 bg-[#FAF8F5]">
+          <Package className="w-8 h-8 text-[#6E756F]" />
+          <p className="font-hanken font-bold text-sm text-[#1C1B1B]">No Inventory Items Found</p>
+          <p className="font-hanken text-xs text-[#6E756F]">Your stock list is clean and blank. When new specimens are added to the shop catalog, they will appear here.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left font-hanken">
           <thead>
             <tr className="bg-[#FAF8F5] border-b border-[#E5E2DC]">
               <th className="px-6 py-3 font-bold text-[10px] text-[#6E756F] uppercase tracking-wider whitespace-nowrap">
@@ -300,6 +283,7 @@ const InventoryTable = () => {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Edit Stock Modal */}
       <EditStockModal

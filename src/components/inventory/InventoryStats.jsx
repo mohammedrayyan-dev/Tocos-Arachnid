@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, AlertTriangle, Sparkles, DollarSign } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { isDummyProduct } from '../../data/productService'
 
 const parseAmountNumber = (val) => {
   if (val === undefined || val === null) return 0
@@ -12,10 +13,10 @@ const parseAmountNumber = (val) => {
 
 const InventoryStats = () => {
   const [statsData, setStatsData] = useState({
-    totalSpecimens: '63 Units',
-    lowStockAlerts: '1 Item',
-    activeSpecies: '8 Species',
-    monthlyRevenue: '₹ 962'
+    totalSpecimens: '0 Units',
+    lowStockAlerts: '0 Items',
+    activeSpecies: '0 Species',
+    monthlyRevenue: '₹ 0'
   })
 
   useEffect(() => {
@@ -28,7 +29,18 @@ const InventoryStats = () => {
       let products = []
       try {
         const { data } = await supabase.from('products').select('*')
-        if (data) products = data
+        if (data && Array.isArray(data)) products = data.filter(p => !isDummyProduct(p))
+      } catch (e) {}
+
+      try {
+        const saved = localStorage.getItem('tocos_client_products')
+        if (saved) {
+          const clientLocal = JSON.parse(saved).filter(p => !isDummyProduct(p))
+          const pMap = new Map()
+          products.forEach(p => pMap.set(String(p.id), p))
+          clientLocal.forEach(p => pMap.set(String(p.id), p))
+          products = Array.from(pMap.values())
+        }
       } catch (e) {}
 
       // 2. Fetch Orders
@@ -70,9 +82,9 @@ const InventoryStats = () => {
       const combinedOrders = Array.from(allOrdersMap.values())
       const totalRev = combinedOrders.reduce((sum, o) => sum + parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount), 0)
 
-      const stockSum = products.length ? products.reduce((sum, p) => sum + (p.stock || 0), 0) : 63
-      const lowStockCount = products.length ? products.filter(p => (p.stock || 0) < 5).length : 1
-      const activeCount = products.length || 8
+      const stockSum = products.length ? products.reduce((sum, p) => sum + (p.stock || 0), 0) : 0
+      const lowStockCount = products.length ? products.filter(p => (p.stock || 0) < 5).length : 0
+      const activeCount = products.length
 
       setStatsData({
         totalSpecimens: `${stockSum.toLocaleString()} Units`,

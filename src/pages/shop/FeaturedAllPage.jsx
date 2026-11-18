@@ -99,18 +99,6 @@ const FeaturedAllPage = () => {
     .map((word) => word[0].toUpperCase() + word.slice(1))
     .join(" ")
 
-    console.log("featuredType:", featuredType)
-
-    const load = async () => {
-    setLoading(true)
-    const data = await getAllFeaturedByType(featuredType)
-    console.log("products returned:", data)
-    if (isCurrent) {
-        setProducts(data)
-        setLoading(false)
-    }
-}
-
     useEffect(() => {
         let isCurrent = true
         const load = async () => {

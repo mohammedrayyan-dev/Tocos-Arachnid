@@ -136,8 +136,13 @@ const CategoryPage = () => {
               <ProductCard key={p.id} product={p} fromLabel={subCategoryLabel || categoryLabel} />
             ))
           ) : (
-            <div className="col-span-full py-12 text-center font-hanken text-sm text-[#6E756F]">
-              No products found matching your active filters. Try adjusting your selections.
+            <div className="col-span-full py-16 text-center font-hanken">
+              <p className="font-libre text-xl font-bold text-[#163422] mb-1.5">
+                No Specimens in {subCategoryLabel || categoryLabel}
+              </p>
+              <p className="text-xs text-[#6E756F] max-w-md mx-auto">
+                No active listings currently assigned to this category. As new specimens are added to inventory, they will appear here.
+              </p>
             </div>
           )}
         </div>
