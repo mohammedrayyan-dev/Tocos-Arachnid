@@ -3,16 +3,24 @@ import AdminSidebar from '../../components/admin/AdminSidebar'
 import InventoryStats from '../../components/inventory/InventoryStats'
 import InventoryFilters from '../../components/inventory/InventoryFilters'
 import InventoryTable from '../../components/inventory/InventoryTable'
+import AddSpecimenModal from '../../components/product/AddSpecimenModal'
 import { Plus, Download } from 'lucide-react'
 import { toast } from 'sonner'
 
 const Inventory = () => {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
   const handleExportCSV = () => {
     toast.success('Inventory dataset exported as CSV!')
   }
 
   const handleAddNewStock = () => {
-    toast.info('Opening Add New Stock modal...')
+    setIsModalOpen(true)
+  }
+
+  const handleSpecimenAdded = () => {
+    setRefreshKey(prev => prev + 1)
   }
 
   return (
@@ -51,13 +59,20 @@ const Inventory = () => {
         </div>
 
         {/* Top 4 Stat Cards */}
-        <InventoryStats />
+        <InventoryStats key={`stats-${refreshKey}`} />
 
         {/* Filter Controls Bar */}
         <InventoryFilters />
 
         {/* Main Inventory Table */}
-        <InventoryTable />
+        <InventoryTable key={`table-${refreshKey}`} />
+
+        {/* Add Specimen Modal */}
+        <AddSpecimenModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSpecimenAdded={handleSpecimenAdded}
+        />
       </div>
 
     </div>

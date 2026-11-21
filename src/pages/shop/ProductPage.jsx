@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom"
 import Container from "../../components/common/Container"
 import Cash from "/src/assets/image/icons/brown-cash.svg"
 import Shipping from "/src/assets/image/icons/brown-shipping.svg"
-import { getProductBySlug } from "../../data/productService"
+import { getProductBySlug, getSizeOptionsWithPrices, getCleanDescription } from "../../data/productService"
 import Arrows from "/src/assets/image/icons/arrow.svg"
 import { useAuth } from "../../context/AuthContext"
 import { useCart } from "../../context/CartContext"
@@ -137,7 +137,8 @@ const ProductPage = () => {
       toast.info("Please sign in to add items to your cart")
       navigate("/signin", { state: { returnTo: location.pathname } })
     } else {
-      await addItem(product.id, qty)
+      const activePrice = selectedSize?.price ?? (typeof product?.price === 'number' ? product.price : (parseFloat(String(product?.price || 0).replace(/[^\d.]/g, '')) || 0))
+      await addItem(product.id, qty, { ...product, price: activePrice, selectedSize: selectedSize?.label || selectedSize })
       toast.success("Item added to cart!")
     }
   }
@@ -147,7 +148,8 @@ const ProductPage = () => {
       toast.info("Please sign in to proceed with checkout")
       navigate("/signin", { state: { returnTo: location.pathname } })
     } else {
-      await addItem(product.id, qty)
+      const activePrice = selectedSize?.price ?? (typeof product?.price === 'number' ? product.price : (parseFloat(String(product?.price || 0).replace(/[^\d.]/g, '')) || 0))
+      await addItem(product.id, qty, { ...product, price: activePrice, selectedSize: selectedSize?.label || selectedSize })
       navigate("/cart")
     }
   }
@@ -160,8 +162,8 @@ const ProductPage = () => {
       const data = await getProductBySlug(slug)
       if (isCurrent) {
         setProduct(data)
-        const sizeOpts = getSizeOptionsForProduct(data)
-        setSelectedSize(sizeOpts[2] || sizeOpts[0] || "")
+        const sizeOpts = getSizeOptionsWithPrices(data)
+        setSelectedSize(sizeOpts[0] || null)
         setLoading(false)
       }
     }
@@ -202,7 +204,9 @@ const ProductPage = () => {
   } = product
 
   const galleryImages = [thumbnail, thumbnail]
-  const currentSizeOptions = getSizeOptionsForProduct(product)
+  const currentSizeOptions = getSizeOptionsWithPrices(product)
+  const activePrice = selectedSize?.price ?? (typeof price === 'number' ? price : (parseFloat(String(price || 0).replace(/[^\d.]/g, '')) || 0))
+  const cleanDescription = getCleanDescription(description)
 
   return (
     <div className="bg-white min-h-screen py-6">
@@ -274,7 +278,7 @@ const ProductPage = () => {
             <div className="flex flex-col gap-0.5">
               <div className="flex items-baseline gap-2.5">
                 <span className="font-libre text-2xl lg:text-3xl font-bold text-[#785832]">
-                  ₹{(typeof price === 'number' ? price : (parseFloat(String(price || 0).replace(/[^\d.]/g, '')) || 0)).toLocaleString('en-IN')}.00
+                  ₹{activePrice.toLocaleString('en-IN')}.00
                 </span>
                 {discounted_price && (
                   <span className="font-libre text-sm text-[#785832] line-through">
@@ -311,27 +315,41 @@ const ProductPage = () => {
               </div>
             </div>
 
-            {/* Dynamic Size Selector */}
+            {/* Dynamic Size Selector with Custom Pricing */}
             {currentSizeOptions.length > 0 && (
               <div>
-                <h2 className="font-libre text-lg font-bold text-[#785832] mb-1.5">
-                  Size
-                </h2>
-                <div className="grid grid-cols-2 gap-y-1.5 gap-x-4">
-                  {currentSizeOptions.map((sz, idx) => {
-                    const isSelected = selectedSize === sz
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="font-libre text-lg font-bold text-[#785832]">
+                    Select Size & Variant
+                  </h2>
+                  <span className="text-[11px] font-semibold text-[#163422]">
+                    {selectedSize?.label || "Standard"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {currentSizeOptions.map((sz) => {
+                    const isSelected = selectedSize?.id === sz.id || selectedSize?.label === sz.label
                     return (
                       <div
-                        key={idx}
+                        key={sz.id}
                         onClick={() => setSelectedSize(sz)}
-                        className="flex items-center gap-2 font-hanken text-xs font-medium text-[#1C1B1B] cursor-pointer select-none"
+                        className={`flex items-center justify-between px-3 py-2 rounded-sm border cursor-pointer select-none transition ${
+                          isSelected
+                            ? 'border-[#163422] bg-[#F4F6F4]'
+                            : 'border-[#E5E2DC] bg-white hover:border-[#163422]/50'
+                        }`}
                       >
-                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition ${
-                          isSelected ? 'border-[#163422]' : 'border-[#C2C8C0]'
-                        }`}>
-                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#163422]" />}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition ${
+                            isSelected ? 'border-[#163422]' : 'border-[#C2C8C0]'
+                          }`}>
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#163422]" />}
+                          </div>
+                          <span className="font-hanken text-xs font-semibold text-[#1C1B1B] truncate">{sz.label}</span>
                         </div>
-                        <span>{sz}</span>
+                        <span className="font-hanken text-xs font-bold text-[#785832] shrink-0 ml-2">
+                          ₹{sz.price.toLocaleString('en-IN')}
+                        </span>
                       </div>
                     )
                   })}
@@ -406,13 +424,13 @@ const ProductPage = () => {
 
             {showDetails && (
               <div className="pt-4 flex flex-col gap-3">
-                <p className="font-hanken text-sm text-[#525B54] leading-relaxed">
-                  {description || "The Brachypelma auratum, commonly known as the Mexican Flame Knee, is a stunning terrestrial tarantula endemic to the Pacific coast of Mexico. It is closely related to the famous Mexican Red Knee but distinguished by its more vibrant, flame-like orange markings on the patella."}
+                <p className="font-hanken text-sm text-[#525B54] leading-relaxed whitespace-pre-line">
+                  {cleanDescription || "Endemic to tropical rainforests and bio-diverse zones, this captivating specimen exhibits remarkable coloration and natural instincts. Ideal for enthusiastic collectors and museum-grade setups."}
                 </p>
                 <ul className="font-hanken text-xs text-[#525B54] space-y-1.5 pl-1">
-                  <li>• <strong className="font-semibold text-[#163422]">Adult Size:</strong> Up to 15cm (6 inches)</li>
-                  <li>• <strong className="font-semibold text-[#163422]">Lifespan:</strong> Females up to 25+ years, Males 5-8 years</li>
-                  <li>• <strong className="font-semibold text-[#163422]">Temperament:</strong> Docile but can be skittish</li>
+                  <li>• <strong className="font-semibold text-[#163422]">Selected Size:</strong> {selectedSize?.label || "Standard"}</li>
+                  <li>• <strong className="font-semibold text-[#163422]">Selected Variant Price:</strong> ₹{activePrice.toLocaleString('en-IN')}</li>
+                  <li>• <strong className="font-semibold text-[#163422]">Temperament:</strong> {temperament || "Docile"}</li>
                   <li>• <strong className="font-semibold text-[#163422]">Growth Rate:</strong> Slow to Medium</li>
                 </ul>
               </div>
