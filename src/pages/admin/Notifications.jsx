@@ -6,12 +6,34 @@ import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
 import { filterActiveOrders, filterActiveProducts } from '../../lib/deletionSync'
 
+const STORAGE_KEY_READ_NOTIFS = 'tocos_admin_read_notifs'
+const STORAGE_KEY_DISMISSED_NOTIFS = 'tocos_admin_dismissed_notifs'
+
+const getSavedReadIds = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_READ_NOTIFS)
+    return raw ? JSON.parse(raw).map(String) : []
+  } catch (e) {
+    return []
+  }
+}
+
+const getSavedDismissedIds = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DISMISSED_NOTIFS)
+    return raw ? JSON.parse(raw).map(String) : []
+  } catch (e) {
+    return []
+  }
+}
+
 const Notifications = () => {
   const navigate = useNavigate()
   const [filter, setFilter] = useState('All')
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState([])
-  const [readIds, setReadIds] = useState([])
+  const [readIds, setReadIds] = useState(getSavedReadIds)
+  const [dismissedIds, setDismissedIds] = useState(getSavedDismissedIds)
 
   useEffect(() => {
     fetchRealNotifications()
@@ -23,7 +45,11 @@ const Notifications = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => fetchRealNotifications())
       .subscribe()
 
-    const handleSync = () => fetchRealNotifications()
+    const handleSync = () => {
+      setReadIds(getSavedReadIds())
+      setDismissedIds(getSavedDismissedIds())
+      fetchRealNotifications()
+    }
     window.addEventListener('tocos:data_changed', handleSync)
     window.addEventListener('storage', handleSync)
 
@@ -37,6 +63,8 @@ const Notifications = () => {
   const fetchRealNotifications = async () => {
     setLoading(true)
     const generatedAlerts = []
+    const savedRead = getSavedReadIds()
+    const savedDismissed = getSavedDismissedIds()
 
     try {
       // 1. Fetch Real Orders from Supabase
@@ -56,6 +84,8 @@ const Notifications = () => {
       // Convert orders to notifications with live UTR verification
       realOrders.forEach((order) => {
         const id = `order_${order.id}`
+        if (savedDismissed.includes(String(id))) return
+
         const amount = order.total_amount || order.totalAmount || order.amount || 0
         const customer = order.shipping_name || order.recipient || order.customer || 'Valued Customer'
         const dateStr = order.created_at ? new Date(order.created_at).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently'
@@ -82,7 +112,7 @@ const Notifications = () => {
           type: 'order',
           time: dateStr,
           rawTimestamp: order.created_at ? new Date(order.created_at).getTime() : Date.now(),
-          unread: !readIds.includes(String(id)),
+          unread: !savedRead.includes(String(id)),
           Icon: ShoppingCart,
           iconBg: 'bg-[#EAF5ED] text-[#163422]',
           utr: orderUtr,
@@ -101,6 +131,8 @@ const Notifications = () => {
 
       lowStockProducts.forEach((prod) => {
         const id = `stock_${prod.id}`
+        if (savedDismissed.includes(String(id))) return
+
         const stockCount = prod.stock ?? 2
         generatedAlerts.push({
           id: String(id),
@@ -109,7 +141,7 @@ const Notifications = () => {
           type: 'stock',
           time: 'Active Alert',
           rawTimestamp: Date.now() - 3600000,
-          unread: !readIds.includes(String(id)),
+          unread: !savedRead.includes(String(id)),
           Icon: AlertTriangle,
           iconBg: 'bg-[#FCECD9] text-[#785832]'
         })
@@ -121,6 +153,8 @@ const Notifications = () => {
         if (dbProfiles && dbProfiles.length > 0) {
           dbProfiles.forEach((prof) => {
             const id = `cust_${prof.id}`
+            if (savedDismissed.includes(String(id))) return
+
             const name = prof.full_name || 'New Member'
             generatedAlerts.push({
               id: String(id),
@@ -129,7 +163,7 @@ const Notifications = () => {
               type: 'system',
               time: prof.created_at ? new Date(prof.created_at).toLocaleDateString('en-IN') : 'Recently',
               rawTimestamp: prof.created_at ? new Date(prof.created_at).getTime() : Date.now() - 7200000,
-              unread: !readIds.includes(String(id)),
+              unread: !savedRead.includes(String(id)),
               Icon: UserPlus,
               iconBg: 'bg-blue-50 text-blue-700'
             })
@@ -154,6 +188,9 @@ const Notifications = () => {
 
       // Merge DB notifications
       dbNotifs.forEach(n => {
+        const strId = String(n.id)
+        if (savedDismissed.includes(strId)) return
+
         let IconComp = ShoppingCart
         let iconBgColor = 'bg-[#EAF5ED] text-[#163422]'
         if (n.type === 'stock') {
@@ -164,27 +201,29 @@ const Notifications = () => {
           iconBgColor = 'bg-blue-50 text-blue-700'
         }
 
-        notifsMap.set(String(n.id), {
-          id: String(n.id),
+        notifsMap.set(strId, {
+          id: strId,
           title: n.title,
           description: n.description,
           type: n.type || 'system',
           time: n.created_at ? new Date(n.created_at).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently',
           rawTimestamp: n.created_at ? new Date(n.created_at).getTime() : Date.now(),
-          unread: n.is_read !== undefined ? !n.is_read : !readIds.includes(String(n.id)),
+          unread: n.is_read !== undefined ? !n.is_read : !savedRead.includes(strId),
           Icon: IconComp,
           iconBg: iconBgColor
         })
       })
 
-      const combinedNotifs = Array.from(notifsMap.values())
+      const combinedNotifs = Array.from(notifsMap.values()).filter(n => !savedDismissed.includes(String(n.id)))
       const finalNotifs = combinedNotifs.map(n => ({
         ...n,
-        unread: readIds.includes(String(n.id)) ? false : n.unread
+        unread: savedRead.includes(String(n.id)) ? false : n.unread
       }))
 
       finalNotifs.sort((a, b) => b.rawTimestamp - a.rawTimestamp)
       setNotifications(finalNotifs)
+      setReadIds(savedRead)
+      setDismissedIds(savedDismissed)
     } catch (e) {
       console.error('Error loading real notifications:', e)
     } finally {
@@ -192,43 +231,99 @@ const Notifications = () => {
     }
   }
 
-  // Mark single notification as read & sync to Supabase
+  // Mark single notification as read & sync to Supabase + local persistence
   const handleMarkAsRead = async (notifId) => {
-    setReadIds(prev => [...new Set([...prev, notifId])])
-    setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, unread: false } : n))
-    toast.success('Notification marked as read & synced to Supabase!')
+    const strId = String(notifId)
+    const currentRead = getSavedReadIds()
+    if (!currentRead.includes(strId)) {
+      currentRead.push(strId)
+      localStorage.setItem(STORAGE_KEY_READ_NOTIFS, JSON.stringify(currentRead))
+    }
+    setReadIds([...currentRead])
+    setNotifications(prev => prev.map(n => String(n.id) === strId ? { ...n, unread: false } : n))
+    toast.success('Notification marked as read')
+
+    // Broadcast sync event to AdminSidebar and cross-tab listeners
+    window.dispatchEvent(new CustomEvent('tocos:data_changed'))
+    window.dispatchEvent(new Event('storage'))
 
     try {
       await supabase.from('notifications').update({ is_read: true }).eq('id', notifId)
     } catch (e) {}
   }
 
-  // Mark all as read & sync to Supabase
+  // Mark all as read & sync to Supabase + local persistence
   const handleMarkAllRead = async () => {
-    const allIds = notifications.map(n => n.id)
-    setReadIds(allIds)
+    const currentRead = getSavedReadIds()
+    notifications.forEach(n => {
+      const strId = String(n.id)
+      if (!currentRead.includes(strId)) currentRead.push(strId)
+    })
+    localStorage.setItem(STORAGE_KEY_READ_NOTIFS, JSON.stringify(currentRead))
+    setReadIds([...currentRead])
     setNotifications(prev => prev.map(n => ({ ...n, unread: false })))
-    toast.success('All notifications marked as read!')
+    toast.success('All notifications marked as read')
+
+    // Broadcast sync event to AdminSidebar and cross-tab listeners
+    window.dispatchEvent(new CustomEvent('tocos:data_changed'))
+    window.dispatchEvent(new Event('storage'))
 
     try {
       await supabase.from('notifications').update({ is_read: true }).neq('id', '0')
     } catch (e) {}
   }
 
-  // Clear single notification & sync to Supabase
+  // Clear single notification & sync to Supabase + local persistence
   const handleDismissOne = async (notifId) => {
-    setNotifications(prev => prev.filter(n => n.id !== notifId))
+    const strId = String(notifId)
+    const currentDismissed = getSavedDismissedIds()
+    if (!currentDismissed.includes(strId)) {
+      currentDismissed.push(strId)
+      localStorage.setItem(STORAGE_KEY_DISMISSED_NOTIFS, JSON.stringify(currentDismissed))
+    }
+    setDismissedIds([...currentDismissed])
+
+    // Also mark as read in storage so sidebar badge decreases
+    const currentRead = getSavedReadIds()
+    if (!currentRead.includes(strId)) {
+      currentRead.push(strId)
+      localStorage.setItem(STORAGE_KEY_READ_NOTIFS, JSON.stringify(currentRead))
+    }
+    setReadIds([...currentRead])
+
+    setNotifications(prev => prev.filter(n => String(n.id) !== strId))
     toast.info('Notification dismissed')
+
+    // Broadcast sync event to AdminSidebar and cross-tab listeners
+    window.dispatchEvent(new CustomEvent('tocos:data_changed'))
+    window.dispatchEvent(new Event('storage'))
 
     try {
       await supabase.from('notifications').delete().eq('id', notifId)
     } catch (e) {}
   }
 
-  // Clear all & sync to Supabase
+  // Clear all & sync to Supabase + local persistence
   const handleClearAll = async () => {
+    const currentDismissed = getSavedDismissedIds()
+    const currentRead = getSavedReadIds()
+
+    notifications.forEach(n => {
+      const strId = String(n.id)
+      if (!currentDismissed.includes(strId)) currentDismissed.push(strId)
+      if (!currentRead.includes(strId)) currentRead.push(strId)
+    })
+
+    localStorage.setItem(STORAGE_KEY_DISMISSED_NOTIFS, JSON.stringify(currentDismissed))
+    localStorage.setItem(STORAGE_KEY_READ_NOTIFS, JSON.stringify(currentRead))
+    setDismissedIds([...currentDismissed])
+    setReadIds([...currentRead])
     setNotifications([])
     toast.info('Cleared all notifications')
+
+    // Broadcast sync event to AdminSidebar and cross-tab listeners
+    window.dispatchEvent(new CustomEvent('tocos:data_changed'))
+    window.dispatchEvent(new Event('storage'))
 
     try {
       await supabase.from('notifications').delete().neq('id', '0')

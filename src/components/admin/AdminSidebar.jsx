@@ -37,8 +37,10 @@ const AdminSidebar = ({ currentPage }) => {
     const calcUnread = async () => {
       try {
         let readIds = []
+        let dismissedIds = []
         try {
           readIds = JSON.parse(localStorage.getItem('tocos_admin_read_notifs') || '[]')
+          dismissedIds = JSON.parse(localStorage.getItem('tocos_admin_dismissed_notifs') || '[]')
         } catch (e) {}
         let count = 0
 
@@ -47,7 +49,8 @@ const AdminSidebar = ({ currentPage }) => {
           const { data: prods } = await supabase.from('products').select('*').lte('stock', 5)
           const validProds = (prods && Array.isArray(prods)) ? filterActiveProducts(prods) : []
           validProds.forEach(p => {
-            if (!readIds.includes(`stock_${p.id}`)) count++
+            const id = `stock_${p.id}`
+            if (!dismissedIds.includes(id) && !readIds.includes(id)) count++
           })
         } catch (e) {}
 
@@ -57,7 +60,19 @@ const AdminSidebar = ({ currentPage }) => {
           if (ords && Array.isArray(ords)) {
             const activeOrds = filterActiveOrders(ords).slice(0, 10)
             activeOrds.forEach(o => {
-              if (!readIds.includes(`order_${o.id}`)) count++
+              const id = `order_${o.id}`
+              if (!dismissedIds.includes(id) && !readIds.includes(id)) count++
+            })
+          }
+        } catch (e) {}
+
+        // Check Supabase notifications table if any
+        try {
+          const { data: notifs } = await supabase.from('notifications').select('id, is_read').limit(20)
+          if (notifs && Array.isArray(notifs)) {
+            notifs.forEach(n => {
+              const id = String(n.id)
+              if (!dismissedIds.includes(id) && !readIds.includes(id) && !n.is_read) count++
             })
           }
         } catch (e) {}
