@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { supabase } from "../../lib/supabase"
+import { filterActiveOrders } from "../../lib/deletionSync"
 import brazilianBlack from "../../assets/image/brazilian-black.webp"
 import beginnerTarantula from "../../assets/image/beginner-tarantula-care.webp"
 import mexicanRedKnee from "../../assets/image/mexican-red-knee.webp"
@@ -19,51 +20,42 @@ const SpecimenOfMonth = () => {
 
   useEffect(() => {
     fetchTopOrderedSpecimen()
+
+    const channel = supabase
+      .channel('specimen-month-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchTopOrderedSpecimen())
+      .subscribe()
+
+    const handleSync = () => fetchTopOrderedSpecimen()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const fetchTopOrderedSpecimen = async () => {
     try {
-      let dbOrders = []
+      let activeOrders = []
       try {
         const { data } = await supabase.from('orders').select('*')
-        if (data) dbOrders = data
-      } catch (e) {}
-
-      let localOrders = []
-      try {
-        const adminSaved = localStorage.getItem('tocos_admin_orders')
-        if (adminSaved) localOrders = JSON.parse(adminSaved)
-
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (key && key.startsWith('user_orders_')) {
-            const userSaved = localStorage.getItem(key)
-            if (userSaved) {
-              const parsed = JSON.parse(userSaved)
-              if (Array.isArray(parsed)) localOrders.push(...parsed)
-            }
-          }
+        if (data && Array.isArray(data)) {
+          activeOrders = filterActiveOrders(data)
         }
       } catch (e) {}
 
-      const allOrdersMap = new Map()
-      localOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          allOrdersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
-      dbOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          allOrdersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
-
-      const combinedOrders = Array.from(allOrdersMap.values())
+      if (activeOrders.length === 0) {
+        setSpecimen(null)
+        return
+      }
 
       // Rank items by total quantity sold
       const itemCountsMap = new Map()
 
-      combinedOrders.forEach(o => {
+      activeOrders.forEach(o => {
         const items = Array.isArray(o.items) && o.items.length > 0 ? o.items : [
           {
             name: o.species || o.name || 'Conservatory Specimen',
@@ -94,16 +86,19 @@ const SpecimenOfMonth = () => {
 
       const sorted = Array.from(itemCountsMap.values()).sort((a, b) => b.qty - a.qty)
 
-      if (sorted.length > 0) {
+      if (sorted.length > 0 && sorted[0].qty > 0) {
         const topItem = sorted[0]
         setSpecimen({
           name: topItem.name,
           commonName: `Top Ordered • ${topItem.qty} Unit${topItem.qty !== 1 ? 's' : ''} Sold`,
           image: getImageSrc(topItem.name, topItem.img)
         })
+      } else {
+        setSpecimen(null)
       }
     } catch (e) {
       console.warn('Top specimen fetch notice:', e)
+      setSpecimen(null)
     }
   }
 

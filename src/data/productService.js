@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase"
+import { filterActiveProducts } from "../lib/deletionSync"
 import beginnerTarantula from "../assets/image/beginner-tarantula-care.webp"
 import mexicanRedKnee from "../assets/image/mexican-red-knee.webp"
 import brazilianBlack from "../assets/image/brazilian-black.webp"
@@ -143,7 +144,8 @@ export const getAllProducts = async (retries = 2) => {
     try {
         const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false })
         if (!error && Array.isArray(data)) {
-            return data.map(p => {
+            const activeData = filterActiveProducts(data)
+            return activeData.map(p => {
                 const resolvedImg = resolveProductImage(p)
                 const priceNum = Number(p.price) || 0
                 const formatted = {
@@ -176,7 +178,8 @@ export const getAllProducts = async (retries = 2) => {
         if (res.ok) {
             const data = await res.json()
             if (Array.isArray(data)) {
-                return data.map(p => {
+                const activeData = filterActiveProducts(data)
+                return activeData.map(p => {
                     const resolvedImg = resolveProductImage(p)
                     const priceNum = Number(p.price) || 0
                     const formatted = {

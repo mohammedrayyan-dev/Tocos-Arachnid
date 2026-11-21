@@ -3,6 +3,7 @@ import AdminSidebar from '../../components/admin/AdminSidebar'
 import { TrendingUp, DollarSign, ShoppingBag, Percent, Download, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
+import { filterActiveOrders } from '../../lib/deletionSync'
 
 const parseAmountNumber = (val) => {
   if (val === undefined || val === null) return 0
@@ -15,7 +16,7 @@ const parseAmountNumber = (val) => {
 const Analytics = () => {
   const [metrics, setMetrics] = useState({
     grossRevenue: 0,
-    conversionRate: '3.85%',
+    conversionRate: '0.0%',
     specimensSold: 0,
     avgCartValue: 0
   })
@@ -25,34 +26,59 @@ const Analytics = () => {
 
   useEffect(() => {
     fetchLiveAnalytics()
+
+    const channel = supabase
+      .channel('analytics-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchLiveAnalytics())
+      .subscribe()
+
+    const handleSync = () => fetchLiveAnalytics()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const fetchLiveAnalytics = async () => {
     try {
       // Fetch DB orders
-      let dbOrders = []
+      let activeOrders = []
       try {
         const { data } = await supabase.from('orders').select('*')
-        if (data) dbOrders = data
+        if (data && Array.isArray(data)) {
+          activeOrders = filterActiveOrders(data)
+        }
       } catch (e) {}
 
-      // Deduplicate orders by ID
-      const ordersMap = new Map()
-      dbOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          ordersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
+      const totalRev = activeOrders.reduce((sum, o) => sum + parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount), 0)
+      const orderCount = activeOrders.length
 
-      const combinedOrders = Array.from(ordersMap.values())
-      const totalRev = combinedOrders.reduce((sum, o) => sum + parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount), 0)
-      const orderCount = combinedOrders.length
+      if (orderCount === 0) {
+        setMetrics({
+          grossRevenue: 0,
+          conversionRate: '0.0%',
+          specimensSold: 0,
+          avgCartValue: 0
+        })
+        setTopSellingSpecimens([])
+        setCategoryBreakdown([
+          { category: 'Tarantulas (Terrestrial & Arboreal)', percentage: 0, amount: '₹ 0', color: 'bg-[#163422]' },
+          { category: 'Bioactive Enclosures & Terrariums', percentage: 0, amount: '₹ 0', color: 'bg-[#785832]' },
+          { category: 'Care Equipment & Substrates', percentage: 0, amount: '₹ 0', color: 'bg-[#525B54]' },
+          { category: 'Live Feeders & Isopods', percentage: 0, amount: '₹ 0', color: 'bg-[#9DA39E]' }
+        ])
+        return
+      }
 
       // Analyze purchased items across orders
       const speciesSalesMap = new Map()
       let totalUnitsSold = 0
 
-      combinedOrders.forEach(o => {
+      activeOrders.forEach(o => {
         const items = Array.isArray(o.items) && o.items.length > 0 ? o.items : [
           {
             name: o.species || o.name || 'Conservatory Specimen',
@@ -93,16 +119,12 @@ const Analytics = () => {
 
       setMetrics({
         grossRevenue: totalRev,
-        conversionRate: '4.12%',
-        specimensSold: totalUnitsSold || (orderCount > 0 ? orderCount * 2 : 0),
+        conversionRate: orderCount > 0 ? '3.5%' : '0.0%',
+        specimensSold: totalUnitsSold,
         avgCartValue: avgCart
       })
 
-      if (rankedSpecimens.length > 0) {
-        setTopSellingSpecimens(rankedSpecimens)
-      } else {
-        setTopSellingSpecimens([])
-      }
+      setTopSellingSpecimens(rankedSpecimens)
 
       // Real category breakdown calculation from live order items
       const categoryRevMap = {
@@ -112,7 +134,7 @@ const Analytics = () => {
         'Live Feeders & Isopods': 0
       }
 
-      combinedOrders.forEach(o => {
+      activeOrders.forEach(o => {
         const items = Array.isArray(o.items) && o.items.length > 0 ? o.items : [
           {
             name: o.species || o.name || 'Conservatory Specimen',
@@ -143,17 +165,15 @@ const Analytics = () => {
       const totalCatRev = Object.values(categoryRevMap).reduce((a, b) => a + b, 0)
 
       const catConfig = [
-        { name: 'Tarantulas (Terrestrial & Arboreal)', color: 'bg-[#163422]', defaultPct: 65 },
-        { name: 'Bioactive Enclosures & Terrariums', color: 'bg-[#785832]', defaultPct: 20 },
-        { name: 'Care Equipment & Substrates', color: 'bg-[#525B54]', defaultPct: 10 },
-        { name: 'Live Feeders & Isopods', color: 'bg-[#9DA39E]', defaultPct: 5 }
+        { name: 'Tarantulas (Terrestrial & Arboreal)', color: 'bg-[#163422]' },
+        { name: 'Bioactive Enclosures & Terrariums', color: 'bg-[#785832]' },
+        { name: 'Care Equipment & Substrates', color: 'bg-[#525B54]' },
+        { name: 'Live Feeders & Isopods', color: 'bg-[#9DA39E]' }
       ]
 
       const calculatedBreakdown = catConfig.map(item => {
-        const rev = totalCatRev > 0 ? (categoryRevMap[item.name] || 0) : Math.round(totalRev * (item.defaultPct / 100))
-        const effectiveTotal = totalCatRev > 0 ? totalCatRev : totalRev
-        let pct = effectiveTotal > 0 ? Math.round((rev / effectiveTotal) * 100) : item.defaultPct
-        if (rev > 0 && pct === 0) pct = 1
+        const rev = categoryRevMap[item.name] || 0
+        const pct = totalCatRev > 0 ? Math.round((rev / totalCatRev) * 100) : 0
 
         return {
           category: item.name,

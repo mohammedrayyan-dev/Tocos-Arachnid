@@ -4,6 +4,7 @@ import Container from '../../components/common/Container'
 import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { filterActiveOrders } from '../../lib/deletionSync'
 import { ShoppingBag, Truck, Package, Clock, CheckCircle2, ShieldCheck, MapPin } from 'lucide-react'
 
 import beginnerTarantula from '../../assets/image/beginner-tarantula-care.webp'
@@ -114,7 +115,7 @@ const OrderHistory = () => {
           .order('created_at', { ascending: false })
 
         if (!error && data && Array.isArray(data)) {
-          allOrders.push(...data)
+          allOrders.push(...filterActiveOrders(data))
         }
       } catch (e) {
         console.warn("DB orders fetch notice:", e)

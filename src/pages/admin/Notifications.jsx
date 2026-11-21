@@ -4,6 +4,7 @@ import AdminSidebar from '../../components/admin/AdminSidebar'
 import { Bell, AlertTriangle, ShoppingCart, CheckCheck, Trash2, Check, UserPlus, RefreshCw, Copy, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
+import { filterActiveOrders, filterActiveProducts } from '../../lib/deletionSync'
 
 const Notifications = () => {
   const navigate = useNavigate()
@@ -22,8 +23,14 @@ const Notifications = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => fetchRealNotifications())
       .subscribe()
 
+    const handleSync = () => fetchRealNotifications()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
     return () => {
       supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
     }
   }, [])
 
@@ -35,8 +42,8 @@ const Notifications = () => {
       // 1. Fetch Real Orders from Supabase
       let realOrders = []
       try {
-        const { data: dbOrders } = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(15)
-        if (dbOrders && dbOrders.length > 0) realOrders = dbOrders
+        const { data: dbOrders } = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(20)
+        if (dbOrders && dbOrders.length > 0) realOrders = filterActiveOrders(dbOrders).slice(0, 15)
       } catch (e) {}
 
       const extractUtr = (str) => {
@@ -86,9 +93,9 @@ const Notifications = () => {
       // 2. Fetch Real Low Stock Products from Supabase
       let lowStockProducts = []
       try {
-        const { data: dbProducts } = await supabase.from('products').select('*').lte('stock', 5).limit(10)
+        const { data: dbProducts } = await supabase.from('products').select('*').lte('stock', 5).limit(20)
         if (dbProducts && Array.isArray(dbProducts)) {
-          lowStockProducts = dbProducts
+          lowStockProducts = filterActiveProducts(dbProducts).slice(0, 10)
         }
       } catch (e) {}
 

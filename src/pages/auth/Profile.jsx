@@ -7,6 +7,7 @@ import Security from '../../components/profile/Security'
 import SavedAddresses from '../../components/profile/SavedAddresses'
 import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
+import { filterActiveOrders } from '../../lib/deletionSync'
 
 const DEFAULT_INDIAN_MALE_AVATAR = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80"
 
@@ -19,33 +20,22 @@ const Profile = () => {
   useEffect(() => {
     const fetchUserOrders = async () => {
       let dbCount = 0
-      let localCount = 0
 
       if (user?.id || user?.email) {
         try {
-          const userKey = user.id ? `user_orders_${user.id}` : `user_orders_${user.email}`
-          const saved = localStorage.getItem(userKey)
-          if (saved) {
-            const arr = JSON.parse(saved)
-            localCount = arr.length
-          }
-        } catch (e) {}
-
-        try {
-          let query = supabase.from('orders').select('*', { count: 'exact', head: true })
+          let query = supabase.from('orders').select('*')
           if (user?.id) query = query.eq('user_id', user.id)
 
-          const { count, error } = await query
-          if (!error && count !== null) {
-            dbCount = count
+          const { data, error } = await query
+          if (!error && Array.isArray(data)) {
+            const activeOrders = filterActiveOrders(data)
+            dbCount = activeOrders.length
           }
         } catch (e) {
           console.warn('Orders count fetch notice:', e)
         }
 
-        const safeDbCount = typeof dbCount === 'number' && !isNaN(dbCount) ? dbCount : 0
-        const safeLocalCount = typeof localCount === 'number' && !isNaN(localCount) ? localCount : 0
-        setOrdersCount(Math.max(safeDbCount, safeLocalCount))
+        setOrdersCount(dbCount)
       }
     }
     fetchUserOrders()

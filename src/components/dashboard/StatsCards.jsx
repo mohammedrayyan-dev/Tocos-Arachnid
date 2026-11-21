@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { ShoppingCart, Banknote, Users, Package } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { filterActiveOrders, filterActiveProducts } from '../../lib/deletionSync'
 
 const StatsCards = () => {
   const [stats, setStats] = useState({
     totalOrders: '0',
+    rawOrdersCount: 0,
     totalRevenue: '₹ 0',
     totalCustomers: '0',
     availableStock: '0 Units'
@@ -12,6 +14,22 @@ const StatsCards = () => {
 
   useEffect(() => {
     fetchLiveStats()
+
+    const channel = supabase
+      .channel('dashboard-stats-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchLiveStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchLiveStats())
+      .subscribe()
+
+    const handleSync = () => fetchLiveStats()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const parseAmountNumber = (val) => {
@@ -24,44 +42,16 @@ const StatsCards = () => {
 
   const fetchLiveStats = async () => {
     try {
-      // 1. Fetch Orders from DB + Local Storage
-      let dbOrders = []
+      // 1. Fetch Orders from Supabase DB only
+      let activeOrders = []
       try {
         const { data } = await supabase.from('orders').select('*')
-        if (data) dbOrders = data
-      } catch (e) {}
-
-      let localOrders = []
-      try {
-        const adminSaved = localStorage.getItem('tocos_admin_orders')
-        if (adminSaved) localOrders = JSON.parse(adminSaved)
-
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (key && key.startsWith('user_orders_')) {
-            const userSaved = localStorage.getItem(key)
-            if (userSaved) {
-              const parsed = JSON.parse(userSaved)
-              if (Array.isArray(parsed)) localOrders.push(...parsed)
-            }
-          }
+        if (data && Array.isArray(data)) {
+          activeOrders = filterActiveOrders(data)
         }
       } catch (e) {}
 
-      const allOrdersMap = new Map()
-      localOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          allOrdersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
-      dbOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          allOrdersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
-
-      const combinedOrders = Array.from(allOrdersMap.values())
-      const totalRev = combinedOrders.reduce((sum, o) => sum + parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount), 0)
+      const totalRev = activeOrders.reduce((sum, o) => sum + parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount), 0)
 
       // 2. Fetch Customers Count from DB
       let customerCount = 0
@@ -75,14 +65,16 @@ const StatsCards = () => {
       try {
         const { data: products } = await supabase.from('products').select('*')
         if (products && Array.isArray(products)) {
-          stockSum = products.reduce((acc, p) => acc + (p.stock || 0), 0)
+          const activeProducts = filterActiveProducts(products)
+          stockSum = activeProducts.reduce((acc, p) => acc + (p.stock || 0), 0)
         }
       } catch (e) {
         stockSum = 0
       }
 
       setStats({
-        totalOrders: combinedOrders.length.toLocaleString(),
+        totalOrders: activeOrders.length.toLocaleString(),
+        rawOrdersCount: activeOrders.length,
         totalRevenue: `₹ ${totalRev.toLocaleString('en-IN')}`,
         totalCustomers: customerCount ? customerCount.toLocaleString() : '0',
         availableStock: `${stockSum.toLocaleString()} Units`
@@ -96,7 +88,7 @@ const StatsCards = () => {
     {
       label: 'TOTAL ORDERS',
       value: stats.totalOrders,
-      change: '+12%',
+      change: stats.rawOrdersCount > 0 ? `${stats.rawOrdersCount} Live` : 'Live 0',
       isPositive: true,
       Icon: ShoppingCart,
       iconColor: 'text-[#163422]'
@@ -104,7 +96,7 @@ const StatsCards = () => {
     {
       label: 'TOTAL REVENUE',
       value: stats.totalRevenue,
-      change: '+8.4%',
+      change: 'Real-time',
       isPositive: true,
       Icon: Banknote,
       iconColor: 'text-[#785832]'
@@ -112,7 +104,7 @@ const StatsCards = () => {
     {
       label: 'TOTAL CUSTOMERS',
       value: stats.totalCustomers,
-      change: '+22%',
+      change: 'Registered',
       isPositive: true,
       Icon: Users,
       iconColor: 'text-[#163422]'
@@ -120,8 +112,8 @@ const StatsCards = () => {
     {
       label: 'AVAILABLE STOCK',
       value: stats.availableStock,
-      change: '-2%',
-      isPositive: false,
+      change: 'In Catalog',
+      isPositive: true,
       Icon: Package,
       iconColor: 'text-[#525B54]'
     }
@@ -143,7 +135,7 @@ const StatsCards = () => {
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                 card.isPositive 
                   ? 'bg-[#EAF5ED] text-[#163422] border border-[#C6E6CE]' 
-                  : 'bg-[#FEE2E2] text-[#991B1B] border border-[#FCA5A5]'
+                  : 'bg-[#FAF8F5] text-[#525B54] border border-[#E5E2DC]'
               }`}>
                 {card.change}
               </span>

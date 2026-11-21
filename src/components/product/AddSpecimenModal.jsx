@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X, Plus, Trash2, Tag, Layers } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { unmarkProductDeleted } from '../../lib/deletionSync'
 import { toast } from 'sonner'
 
 const DEFAULT_SIZES_BY_CATEGORY = {
@@ -97,6 +98,10 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
         options: validSizes
       } : null
 
+      const descWithMeta = variantsPayload
+        ? `${formData.description?.trim() || ''}\n\n<!--SIZES:${JSON.stringify(variantsPayload)}-->`
+        : (formData.description?.trim() || '')
+
       const newProduct = {
         name: formData.name.trim(),
         slug: slug,
@@ -110,10 +115,11 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
         is_featured: false,
         ref_number: formData.ref_number,
         image: formData.image,
-        description: formData.description?.trim() || ''
+        thumbnail: formData.image,
+        description: descWithMeta
       }
 
-      // Try inserting with variants column if table supports it
+      // Try inserting full payload with variants column
       let insertPayload = { ...newProduct }
       if (variantsPayload) {
         insertPayload.variants = variantsPayload
@@ -121,13 +127,37 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
 
       let res = await supabase.from('products').insert([insertPayload]).select('*')
 
-      // Fallback: If DB table has no 'variants' column, embed variants cleanly in description metadata
-      if (res.error && (res.error.message?.includes('variants') || res.error.code === '42703')) {
-        console.warn('DB schema has no variants column. Embedding sizes & pricing in description metadata.')
-        const descWithMeta = variantsPayload
-          ? `${newProduct.description}\n\n<!--SIZES:${JSON.stringify(variantsPayload)}-->`
-          : newProduct.description
-        res = await supabase.from('products').insert([{ ...newProduct, description: descWithMeta }]).select('*')
+      // Fallback 1: If variants column doesn't exist, insert without variants column (metadata is already in description)
+      if (res.error) {
+        res = await supabase.from('products').insert([newProduct]).select('*')
+      }
+
+      // Fallback 2: If custom fields don't exist in schema, retry with standard core columns
+      if (res.error) {
+        const corePayload = {
+          name: newProduct.name,
+          slug: newProduct.slug,
+          category: newProduct.category,
+          price: newProduct.price,
+          stock: newProduct.stock,
+          image: newProduct.image,
+          thumbnail: newProduct.thumbnail,
+          description: newProduct.description
+        }
+        res = await supabase.from('products').insert([corePayload]).select('*')
+      }
+
+      // Fallback 3: Bare essential columns
+      if (res.error) {
+        const barePayload = {
+          name: newProduct.name,
+          category: newProduct.category,
+          price: newProduct.price,
+          stock: newProduct.stock,
+          image: newProduct.image,
+          thumbnail: newProduct.thumbnail
+        }
+        res = await supabase.from('products').insert([barePayload]).select('*')
       }
 
       if (res.error) {
@@ -136,8 +166,33 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
       }
 
       const createdItem = (res.data && res.data[0]) ? res.data[0] : newProduct
+      if (createdItem.id) {
+        unmarkProductDeleted(createdItem.id)
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tocos:data_changed'))
+        window.dispatchEvent(new Event('storage'))
+      }
+
       toast.success(`Specimen "${formData.name}" added to Conservatory & Shop!`)
       if (onSpecimenAdded) onSpecimenAdded(createdItem)
+
+      // Reset form
+      setFormData({
+        name: '',
+        common_name: '',
+        category: 'Tarantulas',
+        sub_category: 'Terrestrial',
+        origin_tag: 'NEW WORLD',
+        price: '',
+        stock: '10',
+        description: '',
+        ref_number: `AR-${Math.floor(1000 + Math.random() * 9000)}-A`,
+        image: 'https://images.unsplash.com/photo-1589464980073-f3d8e1d8e6ba?w=600&fit=crop'
+      })
+      setSizeVariants(DEFAULT_SIZES_BY_CATEGORY['Tarantulas'])
+
       onClose()
     } catch (err) {
       console.error('Add specimen error:', err)

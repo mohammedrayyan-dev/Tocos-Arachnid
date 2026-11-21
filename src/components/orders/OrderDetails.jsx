@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, MessageSquare, Check, ChevronDown, FileText } from 'lucide-react'
+import { X, MessageSquare, Check, ChevronDown, FileText, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import OrderInvoiceModal from './OrderInvoiceModal'
 
@@ -21,7 +21,7 @@ const formatOrderDateTime = (dateInput, suffix = '') => {
   }
 }
 
-const OrderDetails = ({ order, onClose, onStatusChange, onUtrUpdate }) => {
+const OrderDetails = ({ order, onClose, onStatusChange, onUtrUpdate, onDeleteOrder }) => {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [isEditingUtr, setIsEditingUtr] = useState(false)
   const [customUtr, setCustomUtr] = useState('')
@@ -336,6 +336,16 @@ const OrderDetails = ({ order, onClose, onStatusChange, onUtrUpdate }) => {
           >
             CONTACT CUSTOMER
           </button>
+
+          {onDeleteOrder && (
+            <button
+              onClick={() => onDeleteOrder(order)}
+              className="w-full py-2.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 font-bold text-xs rounded-md transition text-center uppercase tracking-[0.14em] cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-600" />
+              <span>Delete Order Record</span>
+            </button>
+          )}
         </div>
       </div>
 

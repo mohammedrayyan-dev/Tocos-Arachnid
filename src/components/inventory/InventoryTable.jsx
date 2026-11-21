@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { MoreVertical, Tag, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
+import { filterActiveProducts, markProductDeleted } from '../../lib/deletionSync'
 import EditStockModal from './EditStockModal'
 import beginnerTarantula from '../../assets/image/beginner-tarantula-care.webp'
 
@@ -15,6 +16,23 @@ const InventoryTable = () => {
 
   useEffect(() => {
     fetchInventoryItems()
+
+    const channel = supabase
+      .channel('admin-inventory-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+        fetchInventoryItems()
+      })
+      .subscribe()
+
+    const handleSync = () => fetchInventoryItems()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const fetchInventoryItems = async () => {
@@ -23,10 +41,11 @@ const InventoryTable = () => {
       const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false })
       if (error) console.error('Fetch inventory error:', error)
 
-      const finalData = (data && Array.isArray(data)) ? data : []
+      const rawData = (data && Array.isArray(data)) ? data : []
+      const activeData = filterActiveProducts(rawData)
 
-      if (finalData.length > 0) {
-        const mapped = finalData.map(p => {
+      if (activeData.length > 0) {
+        const mapped = activeData.map(p => {
           const priceVal = typeof p.price === 'number' ? p.price : parseFloat(String(p.price).replace(/\D/g, '') || '0')
           const mrpVal = (p.original_price && p.original_price > priceVal) ? p.original_price : priceVal
           const savingsVal = mrpVal - priceVal
@@ -95,13 +114,12 @@ const InventoryTable = () => {
 
   const handleDeleteItem = async (id, species) => {
     try {
-      const { error } = await supabase.from('products').delete().eq('id', id)
-      if (error) throw error
+      await markProductDeleted(id)
       setItems(prev => prev.filter(i => i.id !== id))
-      toast.success(`Removed ${species} from inventory`)
+      toast.success(`Permanently removed ${species} from inventory`)
     } catch (e) {
       console.error('Delete item error:', e)
-      toast.error('Failed to remove item from database: ' + e.message)
+      toast.error('Failed to remove item: ' + e.message)
     }
     setOpenActionId(null)
   }

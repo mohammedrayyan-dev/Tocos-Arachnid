@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { filterActiveOrders } from '../../lib/deletionSync'
 
 const parseAmountNumber = (val) => {
   if (val === undefined || val === null) return 0
@@ -15,48 +16,34 @@ const SalesPerformance = () => {
 
   useEffect(() => {
     fetchLiveRevenue()
+
+    const channel = supabase
+      .channel('sales-perf-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchLiveRevenue())
+      .subscribe()
+
+    const handleSync = () => fetchLiveRevenue()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const fetchLiveRevenue = async () => {
     try {
-      let dbOrders = []
+      let activeOrders = []
       try {
         const { data } = await supabase.from('orders').select('*')
-        if (data) dbOrders = data
-      } catch (e) {}
-
-      let localOrders = []
-      try {
-        const adminSaved = localStorage.getItem('tocos_admin_orders')
-        if (adminSaved) localOrders = JSON.parse(adminSaved)
-
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (key && key.startsWith('user_orders_')) {
-            const userSaved = localStorage.getItem(key)
-            if (userSaved) {
-              const parsed = JSON.parse(userSaved)
-              if (Array.isArray(parsed)) localOrders.push(...parsed)
-            }
-          }
+        if (data && Array.isArray(data)) {
+          activeOrders = filterActiveOrders(data)
         }
       } catch (e) {}
 
-      const allOrdersMap = new Map()
-      localOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          allOrdersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
-      dbOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          allOrdersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
-
-      const combinedOrders = Array.from(allOrdersMap.values())
-      const totalRev = combinedOrders.reduce((sum, o) => sum + parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount), 0)
-
+      const totalRev = activeOrders.reduce((sum, o) => sum + parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount), 0)
       setCurrentRevenue(totalRev)
     } catch (e) {
       console.warn('Sales performance fetch notice:', e)
@@ -98,34 +85,27 @@ const SalesPerformance = () => {
               className="transition-all duration-1000 ease-out"
             />
           </svg>
+
+          {/* Center Info */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <p className="font-libre text-3xl font-bold text-[#163422]">
+            <span className="font-libre text-3xl font-bold text-[#163422]">
               {percentage}%
-            </p>
-            <p className="font-hanken text-[10px] font-bold text-[#6E756F] uppercase tracking-wider">
-              GOAL
-            </p>
+            </span>
+            <span className="font-hanken text-[10px] font-semibold text-[#6E756F]">
+              of Target
+            </span>
           </div>
         </div>
 
-        {/* Current vs Target Grid */}
-        <div className="w-full grid grid-cols-2 gap-3 font-hanken">
-          <div className="bg-[#FAF8F5] border border-[#E5E2DC] p-3 rounded-lg text-center">
-            <p className="font-hanken text-[10px] font-bold text-[#6E756F] uppercase tracking-wider mb-0.5">
-              Current
-            </p>
-            <p className="font-libre font-bold text-sm text-[#163422]">
-              ₹ {currentRevenue.toLocaleString('en-IN')}
-            </p>
+        {/* Target Details */}
+        <div className="w-full space-y-2.5 pt-4 border-t border-[#E5E2DC]">
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-semibold text-[#525B54]">Current Sales</span>
+            <span className="font-bold text-[#163422]">₹ {currentRevenue.toLocaleString('en-IN')}</span>
           </div>
-
-          <div className="bg-[#FAF8F5] border border-[#E5E2DC] p-3 rounded-lg text-center">
-            <p className="font-hanken text-[10px] font-bold text-[#6E756F] uppercase tracking-wider mb-0.5">
-              Target
-            </p>
-            <p className="font-libre font-bold text-sm text-[#163422]">
-              ₹ 50K
-            </p>
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-semibold text-[#525B54]">Target Goal</span>
+            <span className="font-bold text-[#785832]">₹ {targetRevenue.toLocaleString('en-IN')}</span>
           </div>
         </div>
       </div>

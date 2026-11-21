@@ -5,8 +5,8 @@ import AdminProductCard from '../../components/product/AdminProductCard'
 import AddSpecimenCard from '../../components/product/AddSpecimenCard'
 import AddSpecimenModal from '../../components/product/AddSpecimenModal'
 import { supabase } from '../../lib/supabase'
+import { filterActiveProducts, markProductDeleted } from '../../lib/deletionSync'
 import { toast } from 'sonner'
-import { Trash2, Sparkles, RefreshCw } from 'lucide-react'
 
 import beginnerTarantula from '../../assets/image/beginner-tarantula-care.webp'
 
@@ -15,11 +15,27 @@ const ProductManagement = () => {
   const [sortBy, setSortBy] = useState('Price')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [purging, setPurging] = useState(false)
   const [productsList, setProductsList] = useState([])
 
   useEffect(() => {
     fetchLiveProducts()
+
+    const channel = supabase
+      .channel('admin-products-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+        fetchLiveProducts()
+      })
+      .subscribe()
+
+    const handleSync = () => fetchLiveProducts()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const fetchLiveProducts = async () => {
@@ -28,10 +44,11 @@ const ProductManagement = () => {
       const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false })
       if (error) console.error('Fetch products error:', error)
       
-      const finalData = (data && Array.isArray(data)) ? data : []
+      const rawData = (data && Array.isArray(data)) ? data : []
+      const activeData = filterActiveProducts(rawData)
 
-      if (finalData.length > 0) {
-        const mapped = finalData.map(p => {
+      if (activeData.length > 0) {
+        const mapped = activeData.map(p => {
           const img = p.thumbnail || p.image || (Array.isArray(p.images) && p.images[0]) || beginnerTarantula
           const priceNum = typeof p.price === 'number' ? p.price : parseFloat(String(p.price).replace(/\D/g, '') || '0')
           return {
@@ -67,74 +84,12 @@ const ProductManagement = () => {
     if (!window.confirm(`Are you sure you want to delete specimen "${product.name}"?`)) return
 
     try {
-      const { error } = await supabase.from('products').delete().eq('id', product.id)
-      if (error) throw error
+      await markProductDeleted(product.id)
       setProductsList(prev => prev.filter(p => p.id !== product.id))
-      toast.success(`Specimen "${product.name}" removed from catalog.`)
+      toast.success(`Specimen "${product.name}" permanently removed from catalog.`)
     } catch (e) {
       console.error('Delete product error:', e)
-      toast.error('Failed to delete product from database: ' + e.message)
-    }
-  }
-
-  const handlePurgeAllTestData = async () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to permanently clear ALL test products, dummy orders, and test logs?\n\nThis will reset the application to a completely clean slate ready for handing over to the client."
-    )
-    if (!confirmed) return
-
-    try {
-      setPurging(true)
-
-      // 1. Fetch & delete all products from Supabase
-      try {
-        const { data: allProds } = await supabase.from('products').select('id')
-        if (allProds && allProds.length > 0) {
-          const ids = allProds.map(p => p.id)
-          await supabase.from('products').delete().in('id', ids)
-        }
-      } catch (e) {
-        console.warn('Product purge DB error:', e)
-      }
-
-      // 2. Fetch & delete all orders & order items from Supabase
-      try {
-        const { data: allOrders } = await supabase.from('orders').select('id')
-        if (allOrders && allOrders.length > 0) {
-          const ordIds = allOrders.map(o => o.id)
-          try {
-            await supabase.from('order_items').delete().in('order_id', ordIds)
-          } catch (e) {}
-          await supabase.from('orders').delete().in('id', ordIds)
-        }
-      } catch (e) {
-        console.warn('Order purge DB error:', e)
-      }
-
-      // 3. Clear all test keys in localStorage
-      try {
-        localStorage.removeItem('tocos_admin_orders')
-        localStorage.removeItem('tocos_order_utrs')
-        localStorage.removeItem('tocos_order_status_overrides')
-        localStorage.removeItem('tocos_local_products')
-
-        for (let i = localStorage.length - 1; i >= 0; i--) {
-          const key = localStorage.key(i)
-          if (key && (key.startsWith('user_orders_') || key.startsWith('tocos_'))) {
-            localStorage.removeItem(key)
-          }
-        }
-        window.dispatchEvent(new Event('storage'))
-      } catch (e) {}
-
-      // 4. Reset state
-      setProductsList([])
-      toast.success('All dummy test products and test data have been permanently purged! Application is fresh for client handover.')
-    } catch (err) {
-      console.error('Purge error:', err)
-      toast.error('Notice during deletion: ' + (err.message || 'Check connection'))
-    } finally {
-      setPurging(false)
+      toast.error('Failed to delete product: ' + e.message)
     }
   }
 
@@ -163,13 +118,6 @@ const ProductManagement = () => {
     fetchLiveProducts()
   }
 
-  const hasTestPlaceholderData = productsList.some(p => 
-    String(p.image).includes('placehold') || 
-    p.name.includes('Misting') || 
-    p.name.includes('Springtails') || 
-    p.name.includes('Water Dish')
-  )
-
   return (
     <div className="flex flex-row w-full min-h-screen bg-[#FCF9F8]">
       <AdminSidebar currentPage="Products" />
@@ -192,42 +140,8 @@ const ProductManagement = () => {
               onFilterChange={setFilter}
               onSortChange={setSortBy}
             />
-
-            {productsList.length > 0 && (
-              <button
-                onClick={handlePurgeAllTestData}
-                disabled={purging}
-                className="px-3.5 py-2 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-md transition cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs disabled:opacity-50"
-                title="Permanently remove all test specimens and dummy orders for clean client handover"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                <span>{purging ? 'Purging...' : 'Clear All Test Data'}</span>
-              </button>
-            )}
           </div>
         </div>
-
-        {/* Client Handover / Test Data Banner if test placeholders exist */}
-        {hasTestPlaceholderData && (
-          <div className="mb-6 p-4 rounded-xl bg-amber-50/90 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-950 shadow-2xs">
-            <div className="flex items-start gap-2.5">
-              <Sparkles className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-xs text-amber-900">Testing Data Detected for Handover</p>
-                <p className="text-[11px] text-amber-800 mt-0.5">
-                  Your catalog currently contains placeholder test products. Click &quot;Purge All Test Data Now&quot; to wipe test entries and leave a fresh catalog ready for your client.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handlePurgeAllTestData}
-              disabled={purging}
-              className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-md text-xs font-bold shrink-0 cursor-pointer transition shadow-xs disabled:opacity-50"
-            >
-              {purging ? 'Purging...' : 'Purge All Test Data Now'}
-            </button>
-          </div>
-        )}
 
         {/* Product Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">

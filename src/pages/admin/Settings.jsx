@@ -71,50 +71,6 @@ const Settings = () => {
     mfaRemoved: false
   })
 
-  const handlePurgeAllTestData = async () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to permanently clear ALL test products, dummy orders, and test logs?\n\nThis will reset the application to a completely clean slate ready for handing over to the client."
-    )
-    if (!confirmed) return
-
-    try {
-      try {
-        const { data: allProds } = await supabase.from('products').select('id')
-        if (allProds && allProds.length > 0) {
-          const ids = allProds.map(p => p.id)
-          await supabase.from('products').delete().in('id', ids)
-        }
-      } catch (e) {}
-
-      try {
-        const { data: allOrders } = await supabase.from('orders').select('id')
-        if (allOrders && allOrders.length > 0) {
-          const ordIds = allOrders.map(o => o.id)
-          try {
-            await supabase.from('order_items').delete().in('order_id', ordIds)
-          } catch (e) {}
-          await supabase.from('orders').delete().in('id', ordIds)
-        }
-      } catch (e) {}
-
-      localStorage.removeItem('tocos_admin_orders')
-      localStorage.removeItem('tocos_order_utrs')
-      localStorage.removeItem('tocos_order_status_overrides')
-      localStorage.removeItem('tocos_local_products')
-
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const key = localStorage.key(i)
-        if (key && (key.startsWith('user_orders_') || key.startsWith('tocos_'))) {
-          localStorage.removeItem(key)
-        }
-      }
-      window.dispatchEvent(new Event('storage'))
-      toast.success('All dummy test products and test data have been permanently purged! Application is fresh for client handover.')
-    } catch (err) {
-      toast.error('Notice during purge: ' + (err.message || 'Check connection'))
-    }
-  }
-
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     setIsTouched(true)
@@ -296,23 +252,6 @@ const Settings = () => {
                   </div>
                 </div>
 
-                {/* Store Maintenance & Client Handover Section */}
-                <div className="pt-6 mt-6 border-t border-[#E5E2DC]">
-                  <h4 className="font-libre text-lg font-bold text-[#991B1B] mb-1">
-                    Store Maintenance & Client Handover
-                  </h4>
-                  <p className="text-xs text-[#6E756F] mb-4">
-                    Permanently clear testing specimens, dummy customer orders, and local testing cache before handing over the project to your client.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handlePurgeAllTestData}
-                    className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-md text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xs"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                    <span>Clear All Test Products & Orders</span>
-                  </button>
-                </div>
               </div>
             )}
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, AlertTriangle, Sparkles, DollarSign } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { filterActiveProducts, filterActiveOrders } from '../../lib/deletionSync'
 
 const parseAmountNumber = (val) => {
   if (val === undefined || val === null) return 0
@@ -20,6 +21,22 @@ const InventoryStats = () => {
 
   useEffect(() => {
     fetchInventoryMetrics()
+
+    const channel = supabase
+      .channel('inventory-stats-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchInventoryMetrics())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchInventoryMetrics())
+      .subscribe()
+
+    const handleSync = () => fetchInventoryMetrics()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const fetchInventoryMetrics = async () => {
@@ -28,48 +45,17 @@ const InventoryStats = () => {
       let products = []
       try {
         const { data } = await supabase.from('products').select('*')
-        if (data && Array.isArray(data)) products = data
+        if (data && Array.isArray(data)) products = filterActiveProducts(data)
       } catch (e) {}
 
       // 2. Fetch Orders
-      let dbOrders = []
+      let activeOrders = []
       try {
         const { data } = await supabase.from('orders').select('*')
-        if (data) dbOrders = data
+        if (data && Array.isArray(data)) activeOrders = filterActiveOrders(data)
       } catch (e) {}
 
-      let localOrders = []
-      try {
-        const adminSaved = localStorage.getItem('tocos_admin_orders')
-        if (adminSaved) localOrders = JSON.parse(adminSaved)
-
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (key && key.startsWith('user_orders_')) {
-            const userSaved = localStorage.getItem(key)
-            if (userSaved) {
-              const parsed = JSON.parse(userSaved)
-              if (Array.isArray(parsed)) localOrders.push(...parsed)
-            }
-          }
-        }
-      } catch (e) {}
-
-      const allOrdersMap = new Map()
-      localOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          allOrdersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
-      dbOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          allOrdersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
-
-      const combinedOrders = Array.from(allOrdersMap.values())
-      const totalRev = combinedOrders.reduce((sum, o) => sum + parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount), 0)
-
+      const totalRev = activeOrders.reduce((sum, o) => sum + parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount), 0)
       const stockSum = products.length ? products.reduce((sum, p) => sum + (p.stock || 0), 0) : 0
       const lowStockCount = products.length ? products.filter(p => (p.stock || 0) < 5).length : 0
       const activeCount = products.length
@@ -103,43 +89,44 @@ const InventoryStats = () => {
     {
       label: 'ACTIVE SPECIES',
       value: statsData.activeSpecies,
-      subtitle: 'Conservatory varieties',
+      subtitle: 'Catalog diversity',
       isWarning: false,
       Icon: Sparkles
     },
     {
-      label: 'TOTAL REVENUE',
+      label: 'ESTIMATED SALES REVENUE',
       value: statsData.monthlyRevenue,
-      subtitle: 'Live customer sales',
+      subtitle: 'Live order transactions',
       isWarning: false,
       Icon: DollarSign
     }
   ]
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6 font-hanken">
-      {stats.map((stat, idx) => (
-        <div 
-          key={idx} 
-          className={`bg-white border ${
-            stat.isWarning ? 'border-[#FCA5A5]' : 'border-[#E5E2DC]'
-          } rounded-xl p-5 shadow-2xs`}
-        >
-          <p className="text-[#6E756F] text-[10px] font-hanken font-bold uppercase tracking-[0.16em] mb-1">
-            {stat.label}
-          </p>
-          <p className={`text-xl md:text-2xl font-hanken font-bold mb-1.5 ${
-            stat.isWarning ? 'text-[#991B1B]' : 'text-[#1C1B1B]'
-          }`}>
-            {stat.value}
-          </p>
-          <div className="flex items-center gap-1.5 text-[11px] font-hanken">
-            <span className={stat.isWarning ? 'text-[#991B1B] font-medium' : 'text-[#6E756F] font-medium'}>
-              {stat.subtitle}
-            </span>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8 font-hanken">
+      {stats.map((stat, idx) => {
+        const Icon = stat.Icon
+        return (
+          <div 
+            key={idx} 
+            className="bg-white border border-[#E5E2DC] rounded-xl p-5 shadow-2xs hover:shadow-xs transition duration-200"
+          >
+            <div className="flex justify-between items-start mb-3">
+              <Icon className={`w-5 h-5 ${stat.isWarning ? 'text-[#991B1B]' : 'text-[#163422]'}`} />
+              <span className="font-hanken text-[11px] font-semibold text-[#6E756F]">
+                {stat.subtitle}
+              </span>
+            </div>
+
+            <p className="text-[#6E756F] text-[10px] font-bold uppercase tracking-[0.16em] mb-1">
+              {stat.label}
+            </p>
+            <p className="text-2xl font-bold text-[#1C1B1B]">
+              {stat.value}
+            </p>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

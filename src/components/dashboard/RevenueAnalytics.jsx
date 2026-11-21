@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { filterActiveOrders } from '../../lib/deletionSync'
 
 const parseAmountNumber = (val) => {
   if (val === undefined || val === null) return 0
@@ -29,58 +30,45 @@ const RevenueAnalytics = () => {
 
   useEffect(() => {
     fetchMonthlyRevenue()
+
+    const channel = supabase
+      .channel('revenue-analytics-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchMonthlyRevenue())
+      .subscribe()
+
+    const handleSync = () => fetchMonthlyRevenue()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const fetchMonthlyRevenue = async () => {
     try {
-      let dbOrders = []
+      let activeOrders = []
       try {
         const { data } = await supabase.from('orders').select('*')
-        if (data) dbOrders = data
-      } catch (e) {}
-
-      let localOrders = []
-      try {
-        const adminSaved = localStorage.getItem('tocos_admin_orders')
-        if (adminSaved) localOrders = JSON.parse(adminSaved)
-
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (key && key.startsWith('user_orders_')) {
-            const userSaved = localStorage.getItem(key)
-            if (userSaved) {
-              const parsed = JSON.parse(userSaved)
-              if (Array.isArray(parsed)) localOrders.push(...parsed)
-            }
-          }
+        if (data && Array.isArray(data)) {
+          activeOrders = filterActiveOrders(data)
         }
       } catch (e) {}
 
-      const allOrdersMap = new Map()
-      localOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          allOrdersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
-      dbOrders.forEach(o => {
-        if (o && (o.id || o.order_id || o.orderId)) {
-          allOrdersMap.set(String(o.id || o.order_id || o.orderId), o)
-        }
-      })
-
-      const combinedOrders = Array.from(allOrdersMap.values())
       const monthBuckets = Array(12).fill(0)
-
       let total = 0
-      combinedOrders.forEach(o => {
+
+      activeOrders.forEach(o => {
         const amt = parseAmountNumber(o.total_amount || o.amount || o.rawTotalAmount)
         total += amt
         const dateObj = new Date(o.created_at || o.createdAt || Date.now())
-        const monthIndex = isNaN(dateObj.getMonth()) ? 7 : dateObj.getMonth() // default Aug
+        const monthIndex = isNaN(dateObj.getMonth()) ? new Date().getMonth() : dateObj.getMonth()
         monthBuckets[monthIndex] += amt
       })
 
-      setTotalGrossRev(total || 962)
+      setTotalGrossRev(total)
 
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
       const formatted = months.map((month, idx) => ({
@@ -121,35 +109,56 @@ const RevenueAnalytics = () => {
         </div>
       </div>
 
-      {/* Graph Area with 50K Target Line */}
-      <div className="relative overflow-x-auto min-w-0">
-        <div className="min-w-70">
-          {/* 50K Reference Line */}
-          <div className="absolute left-0 right-0 top-3 border-b border-dashed border-[#785832]/40 z-10 flex justify-end pr-1">
-            <span className="bg-[#FAF8F5] text-[#785832] font-bold text-[9px] px-1.5 py-0.5 rounded border border-[#E5E2DC] -translate-y-2.5">
-              50K TARGET
-            </span>
-          </div>
+      {/* SVG Bar Chart with Responsive Aspect Ratio */}
+      <div className="w-full h-48 sm:h-56 relative pt-2">
+        {/* 50K Target Reference Line */}
+        <div 
+          className="absolute left-0 right-0 border-b border-dashed border-[#785832]/60 z-0 pointer-events-none"
+          style={{ 
+            bottom: `${Math.min(95, Math.max(5, (targetMaxScale / maxRev) * 80))}%` 
+          }}
+        >
+          <span className="absolute -top-4 right-0 font-hanken text-[9px] font-bold text-[#785832] tracking-wider uppercase bg-white/80 px-1 rounded">
+            Target 50K
+          </span>
+        </div>
 
-          <div className="h-44 sm:h-48 flex items-end justify-between gap-1 sm:gap-2.5 md:gap-3 pt-8 border-b border-[#E5E2DC] relative">
-            {monthlyData.map((item, idx) => {
-              const heightPercent = item.revenue > 0 ? Math.max(6, Math.round((item.revenue / maxRev) * 100)) : 3
-              return (
-                <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group relative z-20">
-                  <div 
-                    className={`w-full max-w-6 rounded-t-sm transition-all duration-300 ${
-                      item.revenue > 0 ? 'bg-[#163422] hover:bg-[#0D2316]' : 'bg-[#E5E2DC]/50'
-                    }`}
-                    style={{ height: `${heightPercent}%` }}
-                    title={`${item.month}: ₹ ${item.revenue.toLocaleString('en-IN')}`}
-                  />
-                  <span className="font-hanken text-[9px] sm:text-[10px] font-semibold text-[#6E756F]">
-                    {item.month}
-                  </span>
+        <div className="h-full flex items-end justify-between gap-1 sm:gap-3 px-1 sm:px-2 relative z-10">
+          {monthlyData.map((item, index) => {
+            const heightPercent = maxRev > 0 ? (item.revenue / maxRev) * 100 : 0
+            const isZero = item.revenue === 0
+
+            return (
+              <div 
+                key={index} 
+                className="flex-1 flex flex-col items-center gap-2 group h-full justify-end cursor-pointer"
+              >
+                {/* Value on Hover */}
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-4 bg-[#1C1B1B] text-white text-[10px] font-semibold py-0.5 px-2 rounded whitespace-nowrap z-20 pointer-events-none shadow-md">
+                  {item.month}: ₹ {item.revenue.toLocaleString('en-IN')}
                 </div>
-              )
-            })}
-          </div>
+
+                {/* Bar */}
+                <div className="w-full flex justify-center items-end h-[80%]">
+                  <div
+                    className={`w-full max-w-[28px] rounded-t-sm transition-all duration-500 ease-out ${
+                      isZero
+                        ? 'bg-[#E5E2DC]/50 h-1' 
+                        : 'bg-[#163422] group-hover:bg-[#785832]'
+                    }`}
+                    style={{
+                      height: isZero ? '4px' : `${Math.max(6, heightPercent)}%`
+                    }}
+                  />
+                </div>
+
+                {/* Month Label */}
+                <span className="font-hanken text-[10px] sm:text-xs font-semibold text-[#6E756F] group-hover:text-[#163422] transition-colors">
+                  {item.month}
+                </span>
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>

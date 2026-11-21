@@ -4,6 +4,8 @@ import OrderStats from '../../components/orders/OrderStats'
 import OrdersTable from '../../components/orders/OrdersTable'
 import OrderDetails from '../../components/orders/OrderDetails'
 import { supabase } from '../../lib/supabase'
+import { filterActiveOrders, markOrderDeleted } from '../../lib/deletionSync'
+import { toast } from 'sonner'
 
 const Orders = () => {
   const [ordersList, setOrdersList] = useState([])
@@ -21,8 +23,14 @@ const Orders = () => {
       })
       .subscribe()
 
+    const handleSync = () => fetchLiveOrders()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
     return () => {
       supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
     }
   }, [])
 
@@ -46,6 +54,8 @@ const Orders = () => {
         .order('created_at', { ascending: false })
 
       if (!error && data) {
+        const activeData = filterActiveOrders(data)
+
         // Load persistent local overrides (handles DB lag & custom UTR mappings)
         const statusOverrides = JSON.parse(localStorage.getItem('tocos_order_status_overrides') || '{}')
         const utrMap = JSON.parse(localStorage.getItem('tocos_order_utrs') || '{}')
@@ -56,7 +66,7 @@ const Orders = () => {
           return match ? match[0] : ''
         }
 
-        const mapped = data.map(o => {
+        const mapped = activeData.map(o => {
           const customerName = o.shipping_name || o.customer_name || o.recipient || (o.email ? o.email.split('@')[0] : 'Customer')
           const initials = customerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
           const rawId = o.id || o.order_id || o.orderId || 'ORD'
@@ -97,6 +107,8 @@ const Orders = () => {
         setOrdersList(mapped)
         if (mapped.length > 0) {
           setSelectedOrder(prev => prev ? (mapped.find(item => item.id === prev.id || item.rawId === prev.rawId) || mapped[0]) : mapped[0])
+        } else {
+          setSelectedOrder(null)
         }
 
         const pendingCount = mapped.filter(o => o.status === 'Pending').length
@@ -110,9 +122,36 @@ const Orders = () => {
           shipped: shippedCount,
           delivered: deliveredCount
         })
+      } else {
+        setOrdersList([])
+        setSelectedOrder(null)
+        setStatsSummary({ pending: 0, confirmed: 0, shipped: 0, delivered: 0 })
       }
     } catch (e) {
       console.warn('Orders fetch error:', e)
+      setOrdersList([])
+      setSelectedOrder(null)
+      setStatsSummary({ pending: 0, confirmed: 0, shipped: 0, delivered: 0 })
+    }
+  }
+
+  const handleDeleteOrder = async (targetOrderOrId) => {
+    const target = typeof targetOrderOrId === 'object'
+      ? targetOrderOrId
+      : ordersList.find(o => o.id === targetOrderOrId || o.rawId === targetOrderOrId)
+
+    if (!target) return
+    const displayId = target.id || target.rawId
+    if (!window.confirm(`Are you sure you want to permanently delete order ${displayId}?`)) return
+
+    try {
+      await markOrderDeleted(target)
+      setOrdersList(prev => prev.filter(o => o.id !== target.id && o.rawId !== target.rawId))
+      setSelectedOrder(prev => (prev && (prev.id === target.id || prev.rawId === target.rawId)) ? null : prev)
+      toast.success(`Order ${displayId} permanently deleted.`)
+    } catch (e) {
+      console.error('Delete order error:', e)
+      toast.error('Failed to delete order: ' + e.message)
     }
   }
 
@@ -225,6 +264,7 @@ const Orders = () => {
               selectedOrderId={selectedOrder?.id}
               onOrdersUpdated={fetchLiveOrders}
               onStatusChange={handleOrderStatusUpdate}
+              onDeleteOrder={handleDeleteOrder}
             />
           </div>
 
@@ -235,6 +275,7 @@ const Orders = () => {
               onClose={() => setSelectedOrder(null)}
               onStatusChange={handleOrderStatusUpdate}
               onUtrUpdate={handleUtrUpdate}
+              onDeleteOrder={handleDeleteOrder}
             />
           )}
         </div>

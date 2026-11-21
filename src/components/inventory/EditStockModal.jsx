@@ -45,7 +45,7 @@ const EditStockModal = ({ isOpen, item, onClose, onSaveSuccess }) => {
     const finalPrice = hasDiscount ? numericDiscount : numericMrp
 
     try {
-      const { error } = await supabase
+      let { error } = await supabase
         .from('products')
         .update({
           stock: finalStock,
@@ -55,7 +55,22 @@ const EditStockModal = ({ isOpen, item, onClose, onSaveSuccess }) => {
         })
         .eq('id', item.id)
 
-      if (error) console.warn('Supabase update notice:', error.message)
+      if (error) {
+        // Fallback: update core stock and price columns only
+        const retryRes = await supabase
+          .from('products')
+          .update({
+            stock: finalStock,
+            price: finalPrice
+          })
+          .eq('id', item.id)
+        if (retryRes.error) console.warn('Supabase stock update fallback notice:', retryRes.error.message)
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tocos:data_changed'))
+        window.dispatchEvent(new Event('storage'))
+      }
 
       toast.success(`Updated stock & pricing for ${item.species}!`)
 

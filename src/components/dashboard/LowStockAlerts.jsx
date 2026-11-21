@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { supabase } from "../../lib/supabase"
+import { filterActiveProducts } from "../../lib/deletionSync"
 import { toast } from "sonner"
 import beginnerTarantula from "../../assets/image/beginner-tarantula-care.webp"
 
@@ -9,6 +10,21 @@ const LowStockAlerts = () => {
 
   useEffect(() => {
     fetchLowStockItems()
+
+    const channel = supabase
+      .channel('low-stock-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchLowStockItems())
+      .subscribe()
+
+    const handleSync = () => fetchLowStockItems()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const fetchLowStockItems = async () => {
@@ -20,7 +36,7 @@ const LowStockAlerts = () => {
         .lt('stock', 5)
         .order('stock', { ascending: true })
 
-      const liveItems = (data && Array.isArray(data)) ? data : []
+      const liveItems = (data && Array.isArray(data)) ? filterActiveProducts(data) : []
       if (liveItems.length > 0) {
         const mapped = liveItems.map(p => ({
           id: p.id,

@@ -1,12 +1,28 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { filterActiveOrders } from '../../lib/deletionSync'
 
 const RecentOrdersActivity = () => {
   const [recentOrders, setRecentOrders] = useState([])
 
   useEffect(() => {
     fetchRecentOrders()
+
+    const channel = supabase
+      .channel('recent-orders-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchRecentOrders())
+      .subscribe()
+
+    const handleSync = () => fetchRecentOrders()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const fetchRecentOrders = async () => {
@@ -15,10 +31,12 @@ const RecentOrdersActivity = () => {
         .from('orders')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(6)
+        .limit(10)
 
-      if (!error && Array.isArray(data) && data.length > 0) {
-        const mapped = data.map(o => {
+      const activeData = (!error && Array.isArray(data)) ? filterActiveOrders(data).slice(0, 6) : []
+
+      if (activeData.length > 0) {
+        const mapped = activeData.map(o => {
           const rawId = o.id || o.order_id || o.orderId || '#TA-89241'
           const numTotal = typeof o.total_amount === 'number' ? o.total_amount : parseFloat(String(o.total_amount || o.rawTotalAmount || o.amount || 0).replace(/[^\d.]/g, ''))
           const firstItem = Array.isArray(o.items) && o.items[0] ? (o.items[0].name || o.items[0].products?.name || 'Live Specimen') : 'Live Specimen Purchase'

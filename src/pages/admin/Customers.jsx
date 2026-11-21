@@ -3,6 +3,7 @@ import AdminSidebar from '../../components/admin/AdminSidebar'
 import { Users, Crown, DollarSign, TrendingUp, Search, Mail, Edit, MoreVertical, Download, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
+import { filterActiveOrders } from '../../lib/deletionSync'
 
 const Customers = () => {
   const [activeFilter, setActiveFilter] = useState('All')
@@ -11,6 +12,22 @@ const Customers = () => {
 
   useEffect(() => {
     fetchLiveCustomers()
+
+    const channel = supabase
+      .channel('customers-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchLiveCustomers())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchLiveCustomers())
+      .subscribe()
+
+    const handleSync = () => fetchLiveCustomers()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
   }, [])
 
   const parseAmountNumber = (val) => {
@@ -34,7 +51,7 @@ const Customers = () => {
 
       try {
         const { data: oData } = await supabase.from('orders').select('*')
-        if (oData) dbOrders = oData
+        if (oData) dbOrders = filterActiveOrders(oData)
       } catch (e) {}
 
       // Combine & Deduplicate all orders by Order ID
@@ -93,21 +110,26 @@ const Customers = () => {
         })
 
         setCustomersData(mapped)
+      } else {
+        setCustomersData([])
       }
     } catch (e) {
       console.warn('Customer list fetch notice:', e)
+      setCustomersData([])
     }
   }
 
   const totalSpentAcrossAll = customersData.reduce((sum, c) => sum + (c.rawSpent || 0), 0)
   const totalOrdersAcrossAll = customersData.reduce((sum, c) => sum + (c.ordersCount || 0), 0)
   const avgOrderValue = totalOrdersAcrossAll > 0 ? Math.round(totalSpentAcrossAll / totalOrdersAcrossAll) : 0
+  const repeatCount = customersData.filter(c => c.ordersCount > 1).length
+  const retentionRate = customersData.length > 0 ? `${Math.round((repeatCount / customersData.length) * 100)}%` : '0.0%'
 
   const stats = [
     { label: 'TOTAL CUSTOMERS', value: customersData.length.toLocaleString(), subtitle: 'Registered members', Icon: Users },
     { label: 'VIP COLLECTORS', value: customersData.filter(c => c.isVip).length.toLocaleString(), subtitle: 'High value buyers', Icon: Crown },
     { label: 'AVG. ORDER VALUE', value: avgOrderValue > 0 ? `₹ ${avgOrderValue.toLocaleString('en-IN')}` : '₹ 0', subtitle: 'Across all buyers', Icon: DollarSign },
-    { label: 'RETENTION RATE', value: '94.2%', subtitle: 'High loyalty', Icon: TrendingUp }
+    { label: 'RETENTION RATE', value: retentionRate, subtitle: customersData.length > 0 ? 'Repeat buyers' : 'No activity', Icon: TrendingUp }
   ]
 
   const filteredCustomers = customersData.filter(c => {

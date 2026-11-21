@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight, Filter, Download, ChevronDown, FileText, ShoppingBag } from 'lucide-react'
+import { ChevronRight, Filter, Download, ChevronDown, FileText, ShoppingBag, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 import OrderInvoiceModal from './OrderInvoiceModal'
 
-const OrdersTable = ({ orders, onSelectOrder, selectedOrderId, onOrdersUpdated, onStatusChange }) => {
+const OrdersTable = ({ orders, onSelectOrder, selectedOrderId, onOrdersUpdated, onStatusChange, onDeleteOrder }) => {
   const [ordersList, setOrdersList] = useState(orders || [])
   const [invoiceOrder, setInvoiceOrder] = useState(null)
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
@@ -222,6 +222,19 @@ const OrdersTable = ({ orders, onSelectOrder, selectedOrderId, onOrdersUpdated, 
                           <FileText className="w-4 h-4 text-[#163422]" />
                           <span className="hidden sm:inline">PDF</span>
                         </button>
+
+                        {onDeleteOrder && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onDeleteOrder(order)
+                            }}
+                            className="p-1 text-[#6E756F] hover:text-[#991B1B] hover:bg-red-50 rounded transition cursor-pointer"
+                            title="Delete Order"
+                          >
+                            <Trash2 className="w-4 h-4 text-[#991B1B]" />
+                          </button>
+                        )}
 
                         <button 
                           onClick={(e) => {

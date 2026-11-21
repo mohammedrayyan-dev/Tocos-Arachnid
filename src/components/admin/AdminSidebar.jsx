@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "../../lib/supabase"
+import { filterActiveProducts, filterActiveOrders } from "../../lib/deletionSync"
 import TocoLogo from "/src/assets/image/tocos-logo.png"
 
 const DEFAULT_ADMIN_AVATAR = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80"
@@ -44,7 +45,7 @@ const AdminSidebar = ({ currentPage }) => {
         // Check Low Stock Products count
         try {
           const { data: prods } = await supabase.from('products').select('*').lte('stock', 5)
-          const validProds = (prods && Array.isArray(prods)) ? prods : []
+          const validProds = (prods && Array.isArray(prods)) ? filterActiveProducts(prods) : []
           validProds.forEach(p => {
             if (!readIds.includes(`stock_${p.id}`)) count++
           })
@@ -52,9 +53,10 @@ const AdminSidebar = ({ currentPage }) => {
 
         // Check Recent Orders count
         try {
-          const { data: ords } = await supabase.from('orders').select('id').order('created_at', { ascending: false }).limit(10)
+          const { data: ords } = await supabase.from('orders').select('id, order_number').order('created_at', { ascending: false }).limit(20)
           if (ords && Array.isArray(ords)) {
-            ords.forEach(o => {
+            const activeOrds = filterActiveOrders(ords).slice(0, 10)
+            activeOrds.forEach(o => {
               if (!readIds.includes(`order_${o.id}`)) count++
             })
           }
@@ -72,8 +74,14 @@ const AdminSidebar = ({ currentPage }) => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => calcUnread())
       .subscribe()
 
+    const handleSync = () => calcUnread()
+    window.addEventListener('tocos:data_changed', handleSync)
+    window.addEventListener('storage', handleSync)
+
     return () => {
       supabase.removeChannel(channel)
+      window.removeEventListener('tocos:data_changed', handleSync)
+      window.removeEventListener('storage', handleSync)
     }
   }, [])
 
