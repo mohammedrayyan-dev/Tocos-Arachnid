@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react"
 import { supabase } from "../../lib/supabase"
 import { toast } from "sonner"
-import { isDummyProduct } from "../../data/productService"
 import beginnerTarantula from "../../assets/image/beginner-tarantula-care.webp"
 
 const LowStockAlerts = () => {
@@ -21,9 +20,9 @@ const LowStockAlerts = () => {
         .lt('stock', 5)
         .order('stock', { ascending: true })
 
-      const clientOnly = (data && Array.isArray(data)) ? data.filter(p => !isDummyProduct(p)) : []
-      if (clientOnly.length > 0) {
-        const mapped = clientOnly.map(p => ({
+      const liveItems = (data && Array.isArray(data)) ? data : []
+      if (liveItems.length > 0) {
+        const mapped = liveItems.map(p => ({
           id: p.id,
           species: p.name,
           commonName: p.common_name || p.name,

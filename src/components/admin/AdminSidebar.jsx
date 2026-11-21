@@ -18,7 +18,6 @@ import {
 } from "lucide-react"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "../../lib/supabase"
-import { isDummyProduct } from "../../data/productService"
 import TocoLogo from "/src/assets/image/tocos-logo.png"
 
 const DEFAULT_ADMIN_AVATAR = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80"
@@ -45,7 +44,7 @@ const AdminSidebar = ({ currentPage }) => {
         // Check Low Stock Products count
         try {
           const { data: prods } = await supabase.from('products').select('*').lte('stock', 5)
-          const validProds = (prods && Array.isArray(prods)) ? prods.filter(p => !isDummyProduct(p)) : []
+          const validProds = (prods && Array.isArray(prods)) ? prods : []
           validProds.forEach(p => {
             if (!readIds.includes(`stock_${p.id}`)) count++
           })

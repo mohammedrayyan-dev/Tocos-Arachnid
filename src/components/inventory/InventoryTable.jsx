@@ -3,7 +3,6 @@ import { MoreVertical, Tag, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
 import EditStockModal from './EditStockModal'
-import { isDummyProduct } from '../../data/productService'
 import beginnerTarantula from '../../assets/image/beginner-tarantula-care.webp'
 
 const InventoryTable = () => {
@@ -24,22 +23,7 @@ const InventoryTable = () => {
       const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false })
       if (error) console.error('Fetch inventory error:', error)
 
-      const clientOnly = (data && Array.isArray(data)) ? data.filter(p => !isDummyProduct(p)) : []
-
-      // Also load locally assigned client products
-      let localClientProducts = []
-      try {
-        const saved = localStorage.getItem('tocos_client_products')
-        if (saved) {
-          localClientProducts = JSON.parse(saved).filter(p => !isDummyProduct(p))
-        }
-      } catch (e) {}
-
-      const mergedMap = new Map()
-      clientOnly.forEach(p => mergedMap.set(String(p.id), p))
-      localClientProducts.forEach(p => mergedMap.set(String(p.id), p))
-
-      const finalData = Array.from(mergedMap.values())
+      const finalData = (data && Array.isArray(data)) ? data : []
 
       if (finalData.length > 0) {
         const mapped = finalData.map(p => {
@@ -111,20 +95,14 @@ const InventoryTable = () => {
 
   const handleDeleteItem = async (id, species) => {
     try {
-      await supabase.from('products').delete().eq('id', id)
-    } catch (e) {}
-
-    try {
-      const saved = localStorage.getItem('tocos_client_products')
-      if (saved) {
-        const filtered = JSON.parse(saved).filter(i => i.id !== id)
-        localStorage.setItem('tocos_client_products', JSON.stringify(filtered))
-        window.dispatchEvent(new Event('storage'))
-      }
-    } catch (e) {}
-
-    setItems(prev => prev.filter(i => i.id !== id))
-    toast.success(`Removed ${species} from inventory`)
+      const { error } = await supabase.from('products').delete().eq('id', id)
+      if (error) throw error
+      setItems(prev => prev.filter(i => i.id !== id))
+      toast.success(`Removed ${species} from inventory`)
+    } catch (e) {
+      console.error('Delete item error:', e)
+      toast.error('Failed to remove item from database: ' + e.message)
+    }
     setOpenActionId(null)
   }
 

@@ -4,7 +4,6 @@ import AdminSidebar from '../../components/admin/AdminSidebar'
 import { Bell, AlertTriangle, ShoppingCart, CheckCheck, Trash2, Check, UserPlus, RefreshCw, Copy, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
-import { isDummyProduct } from '../../data/productService'
 
 const Notifications = () => {
   const navigate = useNavigate()
@@ -84,12 +83,12 @@ const Notifications = () => {
         })
       })
 
-      // 2. Fetch Real Low Stock Products from Supabase & Local Storage
+      // 2. Fetch Real Low Stock Products from Supabase
       let lowStockProducts = []
       try {
         const { data: dbProducts } = await supabase.from('products').select('*').lte('stock', 5).limit(10)
-        if (dbProducts && Array.isArray(dbProducts) && dbProducts.length > 0) {
-          lowStockProducts = dbProducts.filter(p => !isDummyProduct(p))
+        if (dbProducts && Array.isArray(dbProducts)) {
+          lowStockProducts = dbProducts
         }
       } catch (e) {}
 

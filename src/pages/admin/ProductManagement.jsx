@@ -7,7 +7,6 @@ import AddSpecimenModal from '../../components/product/AddSpecimenModal'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 import { Trash2, Sparkles, RefreshCw } from 'lucide-react'
-import { isDummyProduct } from '../../data/productService'
 
 import beginnerTarantula from '../../assets/image/beginner-tarantula-care.webp'
 
@@ -29,22 +28,7 @@ const ProductManagement = () => {
       const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false })
       if (error) console.error('Fetch products error:', error)
       
-      const clientOnly = (data && Array.isArray(data)) ? data.filter(p => !isDummyProduct(p)) : []
-
-      // Also load locally assigned client products
-      let localClientProducts = []
-      try {
-        const saved = localStorage.getItem('tocos_client_products')
-        if (saved) {
-          localClientProducts = JSON.parse(saved).filter(p => !isDummyProduct(p))
-        }
-      } catch (e) {}
-
-      const mergedMap = new Map()
-      clientOnly.forEach(p => mergedMap.set(String(p.id), p))
-      localClientProducts.forEach(p => mergedMap.set(String(p.id), p))
-
-      const finalData = Array.from(mergedMap.values())
+      const finalData = (data && Array.isArray(data)) ? data : []
 
       if (finalData.length > 0) {
         const mapped = finalData.map(p => {
@@ -83,20 +67,14 @@ const ProductManagement = () => {
     if (!window.confirm(`Are you sure you want to delete specimen "${product.name}"?`)) return
 
     try {
-      await supabase.from('products').delete().eq('id', product.id)
-    } catch (e) {}
-
-    try {
-      const saved = localStorage.getItem('tocos_client_products')
-      if (saved) {
-        const filtered = JSON.parse(saved).filter(p => p.id !== product.id)
-        localStorage.setItem('tocos_client_products', JSON.stringify(filtered))
-        window.dispatchEvent(new Event('storage'))
-      }
-    } catch (e) {}
-
-    setProductsList(prev => prev.filter(p => p.id !== product.id))
-    toast.success(`Specimen "${product.name}" removed from catalog.`)
+      const { error } = await supabase.from('products').delete().eq('id', product.id)
+      if (error) throw error
+      setProductsList(prev => prev.filter(p => p.id !== product.id))
+      toast.success(`Specimen "${product.name}" removed from catalog.`)
+    } catch (e) {
+      console.error('Delete product error:', e)
+      toast.error('Failed to delete product from database: ' + e.message)
+    }
   }
 
   const handlePurgeAllTestData = async () => {
@@ -181,37 +159,8 @@ const ProductManagement = () => {
     return 0
   })
 
-  const handleSpecimenAdded = (newSpecimen) => {
-    const rawVal = typeof newSpecimen.price === 'number' ? newSpecimen.price : parseFloat(String(newSpecimen.price).replace(/\D/g, '') || '0')
-    const formatted = {
-      id: newSpecimen.id || `client-${Date.now()}`,
-      image: newSpecimen.image || beginnerTarantula,
-      isFeatured: false,
-      isHidden: false,
-      originTag: newSpecimen.origin_tag || 'NEW WORLD',
-      name: newSpecimen.name,
-      sub_category: newSpecimen.sub_category || 'Terrestrial',
-      category: newSpecimen.category || 'Tarantulas',
-      rawPrice: rawVal,
-      price: typeof newSpecimen.price === 'number' ? `₹ ${newSpecimen.price.toLocaleString('en-IN')}` : newSpecimen.price,
-      commonName: newSpecimen.common_name || newSpecimen.name,
-      stockCount: newSpecimen.stock || 10,
-      stock: newSpecimen.stock || 10,
-      isArchived: false,
-      refNumber: newSpecimen.ref_number || 'AR-NEW',
-      client_assigned: true,
-      created_at: new Date().toISOString()
-    }
-
-    try {
-      const saved = JSON.parse(localStorage.getItem('tocos_client_products') || '[]')
-      const filtered = saved.filter(p => p.id !== formatted.id)
-      filtered.unshift(formatted)
-      localStorage.setItem('tocos_client_products', JSON.stringify(filtered))
-      window.dispatchEvent(new Event('storage'))
-    } catch (e) {}
-
-    setProductsList(prev => [formatted, ...prev])
+  const handleSpecimenAdded = () => {
+    fetchLiveProducts()
   }
 
   const hasTestPlaceholderData = productsList.some(p => 

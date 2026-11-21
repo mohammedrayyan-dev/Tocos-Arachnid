@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, AlertTriangle, Sparkles, DollarSign } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { isDummyProduct } from '../../data/productService'
 
 const parseAmountNumber = (val) => {
   if (val === undefined || val === null) return 0
@@ -29,18 +28,7 @@ const InventoryStats = () => {
       let products = []
       try {
         const { data } = await supabase.from('products').select('*')
-        if (data && Array.isArray(data)) products = data.filter(p => !isDummyProduct(p))
-      } catch (e) {}
-
-      try {
-        const saved = localStorage.getItem('tocos_client_products')
-        if (saved) {
-          const clientLocal = JSON.parse(saved).filter(p => !isDummyProduct(p))
-          const pMap = new Map()
-          products.forEach(p => pMap.set(String(p.id), p))
-          clientLocal.forEach(p => pMap.set(String(p.id), p))
-          products = Array.from(pMap.values())
-        }
+        if (data && Array.isArray(data)) products = data
       } catch (e) {}
 
       // 2. Fetch Orders
