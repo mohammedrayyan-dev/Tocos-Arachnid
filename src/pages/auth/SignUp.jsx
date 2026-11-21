@@ -1,13 +1,13 @@
 import { useState, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import TocoLogo from "/src/assets/image/tocos-logo.png"
 import { toast } from 'sonner'
 import AuthBanner from "/src/assets/image/auth-banner.webp"
 import TermsModal from '../../components/modals/TermsModal'
 import EmailInboxModal from '../../components/modals/EmailInboxModal'
 import { supabase } from '../../lib/supabase'
-import { Mail, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { Mail, AlertCircle, Eye, EyeOff, X } from 'lucide-react'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -452,7 +452,17 @@ const SignUp = () => {
       </div>
 
       {/* Right Column - Form Container */}
-      <div className="w-full lg:w-1/2 flex flex-col justify-center px-4 sm:px-8 lg:px-20 py-8 sm:py-12 bg-white">
+      <div className="w-full lg:w-1/2 flex flex-col justify-center px-4 sm:px-8 lg:px-20 py-8 sm:py-12 bg-white relative">
+        {/* Close / Return to Home Button */}
+        <Link
+          to="/"
+          aria-label="Back to Home"
+          title="Back to Home"
+          className="absolute top-5 right-5 sm:top-8 sm:right-8 p-2.5 rounded-full text-gray-400 hover:text-[#163422] transition-all duration-200 cursor-pointer z-20 group"
+        >
+          <X className="w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-110" />
+        </Link>
+
         <div className="max-w-md mx-auto w-full">
           {/* Logo */}
           <div className="flex items-center gap-2 mb-6 sm:mb-8">
