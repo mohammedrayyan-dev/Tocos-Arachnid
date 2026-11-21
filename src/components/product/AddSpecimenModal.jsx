@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Plus, Trash2, Tag, Layers } from 'lucide-react'
+import { X, Plus, Trash2, Tag, Layers, Image as ImageIcon, Upload } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { unmarkProductDeleted } from '../../lib/deletionSync'
 import { toast } from 'sonner'
@@ -44,7 +44,51 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
   })
 
   const [sizeVariants, setSizeVariants] = useState(DEFAULT_SIZES_BY_CATEGORY['Tarantulas'])
+  const [photos, setPhotos] = useState([
+    'https://images.unsplash.com/photo-1589464980073-f3d8e1d8e6ba?w=600&fit=crop'
+  ])
   const [submitting, setSubmitting] = useState(false)
+
+  const handleAddPhoto = () => {
+    if (photos.length >= 4) {
+      toast.info('Maximum 4 photos allowed per product')
+      return
+    }
+    setPhotos(prev => [...prev, ''])
+  }
+
+  const handlePhotoChange = (index, value) => {
+    setPhotos(prev => {
+      const updated = [...prev]
+      updated[index] = value
+      return updated
+    })
+  }
+
+  const handleRemovePhoto = (index) => {
+    if (photos.length === 1) {
+      setPhotos([''])
+      return
+    }
+    setPhotos(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleFileUpload = (index, file) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (PNG, JPG, WebP)')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be under 5MB')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      handlePhotoChange(index, e.target.result)
+    }
+    reader.readAsDataURL(file)
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -98,9 +142,18 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
         options: validSizes
       } : null
 
-      const descWithMeta = variantsPayload
-        ? `${formData.description?.trim() || ''}\n\n<!--SIZES:${JSON.stringify(variantsPayload)}-->`
-        : (formData.description?.trim() || '')
+      // Filter and format photos (max 4)
+      const validPhotos = photos.map(p => (typeof p === 'string' ? p.trim() : '')).filter(Boolean)
+      const primaryPhoto = validPhotos[0] || 'https://images.unsplash.com/photo-1589464980073-f3d8e1d8e6ba?w=600&fit=crop'
+      const finalPhotosList = validPhotos.length > 0 ? validPhotos.slice(0, 4) : [primaryPhoto]
+
+      let descWithMeta = formData.description?.trim() || ''
+      if (variantsPayload) {
+        descWithMeta += `\n\n<!--SIZES:${JSON.stringify(variantsPayload)}-->`
+      }
+      if (finalPhotosList.length > 0) {
+        descWithMeta += `\n\n<!--IMAGES:${JSON.stringify(finalPhotosList)}-->`
+      }
 
       const newProduct = {
         name: formData.name.trim(),
@@ -114,12 +167,13 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
         is_low_stock: (parseInt(formData.stock) || 10) < 5,
         is_featured: false,
         ref_number: formData.ref_number,
-        image: formData.image,
-        thumbnail: formData.image,
+        image: primaryPhoto,
+        thumbnail: primaryPhoto,
+        images: finalPhotosList,
         description: descWithMeta
       }
 
-      // Try inserting full payload with variants column
+      // Try inserting full payload with variants column and images column
       let insertPayload = { ...newProduct }
       if (variantsPayload) {
         insertPayload.variants = variantsPayload
@@ -132,7 +186,14 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
         res = await supabase.from('products').insert([newProduct]).select('*')
       }
 
-      // Fallback 2: If custom fields don't exist in schema, retry with standard core columns
+      // Fallback 2: If images array column doesn't exist, remove images property (metadata already in description)
+      if (res.error) {
+        const withoutImagesCol = { ...newProduct }
+        delete withoutImagesCol.images
+        res = await supabase.from('products').insert([withoutImagesCol]).select('*')
+      }
+
+      // Fallback 3: If custom fields don't exist in schema, retry with standard core columns
       if (res.error) {
         const corePayload = {
           name: newProduct.name,
@@ -147,7 +208,7 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
         res = await supabase.from('products').insert([corePayload]).select('*')
       }
 
-      // Fallback 3: Bare essential columns
+      // Fallback 4: Bare essential columns
       if (res.error) {
         const barePayload = {
           name: newProduct.name,
@@ -191,6 +252,7 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
         ref_number: `AR-${Math.floor(1000 + Math.random() * 9000)}-A`,
         image: 'https://images.unsplash.com/photo-1589464980073-f3d8e1d8e6ba?w=600&fit=crop'
       })
+      setPhotos(['https://images.unsplash.com/photo-1589464980073-f3d8e1d8e6ba?w=600&fit=crop'])
       setSizeVariants(DEFAULT_SIZES_BY_CATEGORY['Tarantulas'])
 
       onClose()
@@ -333,6 +395,92 @@ const AddSpecimenModal = ({ isOpen, onClose, onSpecimenAdded }) => {
                 onChange={handleChange}
                 className="w-full bg-white border border-[#E5E2DC] rounded-md px-3.5 py-2 text-xs text-[#1C1B1B]"
               />
+            </div>
+          </div>
+
+          {/* Product Photos Section (Max 4 Photos) */}
+          <div className="pt-2 border-t border-[#E5E2DC]">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-[#163422]" />
+                  <h4 className="text-xs font-bold text-[#163422] uppercase tracking-wider">
+                    Product Photos ({photos.filter(p => p && p.trim()).length}/4)
+                  </h4>
+                </div>
+                <p className="text-[11px] text-[#6E756F] mt-0.5">
+                  Add up to 4 photos. First photo is the main cover image. Upload from device or paste image URLs.
+                </p>
+              </div>
+
+              {photos.length < 4 && (
+                <button
+                  type="button"
+                  onClick={handleAddPhoto}
+                  className="px-2.5 py-1.5 bg-[#FAF8F5] hover:bg-gray-100 border border-[#E5E2DC] text-[#163422] text-[11px] font-bold rounded flex items-center gap-1 cursor-pointer transition"
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#163422]" />
+                  <span>Add Photo ({photos.length}/4)</span>
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+              {photos.map((photoUrl, idx) => (
+                <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-[#FAF8F5] p-2.5 rounded-md border border-[#E5E2DC]">
+                  {/* Photo Preview Thumbnail */}
+                  <div className="w-16 h-16 rounded border border-[#E5E2DC] bg-white overflow-hidden shrink-0 relative flex items-center justify-center">
+                    {photoUrl ? (
+                      <img src={photoUrl} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="w-6 h-6 text-gray-300" />
+                    )}
+                    {idx === 0 && (
+                      <span className="absolute bottom-0 inset-x-0 bg-[#163422] text-white text-[8px] font-bold text-center py-0.5 uppercase tracking-wider">
+                        Cover
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Photo Input Controls */}
+                  <div className="flex-1 w-full flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[9px] font-bold text-[#6E756F] uppercase">
+                        {idx === 0 ? 'Main Cover Photo (Required)' : `Photo ${idx + 1}`}
+                      </label>
+                      <label className="text-[10px] text-[#163422] font-semibold hover:underline cursor-pointer flex items-center gap-1">
+                        <Upload className="w-3 h-3" />
+                        <span>Upload from device</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(idx, e.target.files?.[0])}
+                        />
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Paste image URL (or click upload from device)..."
+                      value={photoUrl}
+                      onChange={(e) => handlePhotoChange(idx, e.target.value)}
+                      className="w-full bg-white border border-[#E5E2DC] rounded px-2.5 py-1.5 text-xs text-[#1C1B1B] font-mono focus:outline-none focus:border-[#163422]"
+                    />
+                  </div>
+
+                  {/* Remove Photo Button */}
+                  {photos.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePhoto(idx)}
+                      className="p-2 text-gray-400 hover:text-red-600 rounded cursor-pointer transition self-end sm:self-center"
+                      title="Remove this photo"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 

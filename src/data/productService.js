@@ -83,7 +83,61 @@ export const getProductVariants = (product) => {
 // Strip internal metadata comments for display
 export const getCleanDescription = (desc) => {
     if (!desc) return ""
-    return desc.replace(/<!--SIZES:[\s\S]*?-->/g, '').trim()
+    return desc
+        .replace(/<!--SIZES:[\s\S]*?-->/g, '')
+        .replace(/<!--IMAGES:[\s\S]*?-->/g, '')
+        .trim()
+}
+
+// Extract gallery images (max 4) from images column, embedded metadata, or fallback single image
+export const getProductGalleryImages = (product) => {
+    if (!product) return []
+
+    let images = []
+
+    // 1. Check native images column
+    if (product.images) {
+        if (Array.isArray(product.images)) {
+            images = product.images.filter(img => typeof img === 'string' && img.trim() !== '')
+        } else if (typeof product.images === 'string') {
+            try {
+                const parsed = JSON.parse(product.images)
+                if (Array.isArray(parsed)) {
+                    images = parsed.filter(img => typeof img === 'string' && img.trim() !== '')
+                }
+            } catch (e) {
+                if (product.images.includes(',')) {
+                    images = product.images.split(',').map(s => s.trim()).filter(Boolean)
+                } else if (product.images.trim()) {
+                    images = [product.images.trim()]
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to embedded <!--IMAGES:[...]--> metadata in description
+    if (images.length === 0 && typeof product.description === 'string' && product.description.includes('<!--IMAGES:')) {
+        try {
+            const match = product.description.match(/<!--IMAGES:([\s\S]*?)-->/)
+            if (match && match[1]) {
+                const parsed = JSON.parse(match[1])
+                if (Array.isArray(parsed)) {
+                    images = parsed.filter(img => typeof img === 'string' && img.trim() !== '')
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to parse embedded images metadata:", e)
+        }
+    }
+
+    // 3. Fallback to single image / thumbnail / resolveProductImage
+    if (images.length === 0) {
+        const single = product.thumbnail || product.image || resolveProductImage(product)
+        if (single) images = [single]
+    }
+
+    // Return max 4 valid images
+    return images.slice(0, 4)
 }
 
 // Resolve custom sizes with their specific pricing

@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
-import { X, Tag, DollarSign, Package } from 'lucide-react'
+import { X, Tag, DollarSign, Package, Plus, Trash2, Image as ImageIcon, Upload } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getProductGalleryImages } from '../../data/productService'
 import { toast } from 'sonner'
 
 const EditStockModal = ({ isOpen, item, onClose, onSaveSuccess }) => {
   const [stockCount, setStockCount] = useState('')
   const [mrpPrice, setMrpPrice] = useState('')
   const [discountPrice, setDiscountPrice] = useState('')
+  const [photos, setPhotos] = useState([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -25,6 +27,16 @@ const EditStockModal = ({ isOpen, item, onClose, onSaveSuccess }) => {
       setStockCount(numericStock)
       setMrpPrice(rawMrp)
       setDiscountPrice(rawPrice < rawMrp ? rawPrice : '')
+
+      // Extract existing images or fallback to thumbnail
+      const existingImages = getProductGalleryImages(item.rawProduct || item)
+      if (existingImages.length > 0) {
+        setPhotos(existingImages)
+      } else if (item.thumbnail) {
+        setPhotos([item.thumbnail])
+      } else {
+        setPhotos([])
+      }
     }
   }, [item])
 
@@ -37,12 +49,58 @@ const EditStockModal = ({ isOpen, item, onClose, onSaveSuccess }) => {
   const discountPercent = hasDiscount ? Math.round(((numericMrp - numericDiscount) / numericMrp) * 100) : 0
   const savingsAmount = hasDiscount ? (numericMrp - numericDiscount) : 0
 
+  const handleAddPhoto = () => {
+    if (photos.length >= 4) {
+      toast.info('Maximum 4 photos allowed per product')
+      return
+    }
+    setPhotos(prev => [...prev, ''])
+  }
+
+  const handlePhotoChange = (index, value) => {
+    setPhotos(prev => {
+      const updated = [...prev]
+      updated[index] = value
+      return updated
+    })
+  }
+
+  const handleRemovePhoto = (index) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleFileUpload = (index, file) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (PNG, JPG, WebP)')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be under 5MB')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      handlePhotoChange(index, e.target.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
   const handleSave = async (e) => {
     e.preventDefault()
     setSaving(true)
 
     const finalStock = parseInt(stockCount) || 0
     const finalPrice = hasDiscount ? numericDiscount : numericMrp
+
+    const validPhotos = photos.map(p => (typeof p === 'string' ? p.trim() : '')).filter(Boolean)
+    const primaryPhoto = validPhotos[0] || item.thumbnail
+
+    // Embed in description as resilient metadata fallback
+    let updatedDesc = item.rawProduct?.description || item.description || ''
+    if (validPhotos.length > 0) {
+      updatedDesc = updatedDesc.replace(/<!--IMAGES:[\s\S]*?-->/g, '').trim() + `\n\n<!--IMAGES:${JSON.stringify(validPhotos)}-->`
+    }
 
     try {
       let { error } = await supabase
@@ -51,20 +109,36 @@ const EditStockModal = ({ isOpen, item, onClose, onSaveSuccess }) => {
           stock: finalStock,
           price: finalPrice,
           original_price: numericMrp,
-          is_low_stock: finalStock < 5
+          is_low_stock: finalStock < 5,
+          image: primaryPhoto,
+          thumbnail: primaryPhoto,
+          images: validPhotos,
+          description: updatedDesc
         })
         .eq('id', item.id)
 
       if (error) {
-        // Fallback: update core stock and price columns only
+        // Fallback without images column
         const retryRes = await supabase
           .from('products')
           .update({
             stock: finalStock,
-            price: finalPrice
+            price: finalPrice,
+            image: primaryPhoto,
+            thumbnail: primaryPhoto,
+            description: updatedDesc
           })
           .eq('id', item.id)
-        if (retryRes.error) console.warn('Supabase stock update fallback notice:', retryRes.error.message)
+
+        if (retryRes.error) {
+          await supabase
+            .from('products')
+            .update({
+              stock: finalStock,
+              price: finalPrice
+            })
+            .eq('id', item.id)
+        }
       }
 
       if (typeof window !== 'undefined') {
@@ -72,7 +146,7 @@ const EditStockModal = ({ isOpen, item, onClose, onSaveSuccess }) => {
         window.dispatchEvent(new Event('storage'))
       }
 
-      toast.success(`Updated stock & pricing for ${item.species}!`)
+      toast.success(`Updated stock, pricing & photos for ${item.species}!`)
 
       if (onSaveSuccess) {
         onSaveSuccess({
@@ -84,7 +158,8 @@ const EditStockModal = ({ isOpen, item, onClose, onSaveSuccess }) => {
           hasDiscount,
           discountPercent,
           isLowStock: finalStock < 5,
-          stockStatus: `${finalStock} in Stock`
+          stockStatus: `${finalStock} in Stock`,
+          thumbnail: primaryPhoto
         })
       }
 
@@ -204,6 +279,87 @@ const EditStockModal = ({ isOpen, item, onClose, onSaveSuccess }) => {
               </div>
             </div>
           )}
+
+          {/* Specimen Photos (Max 4) */}
+          <div className="pt-2 border-t border-[#E5E2DC]">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <label className="text-[10px] font-bold text-[#6E756F] uppercase tracking-[0.16em] flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-[#163422]" />
+                  <span>PRODUCT PHOTOS ({photos.filter(p => p && p.trim()).length}/4)</span>
+                </label>
+                <p className="text-[11px] text-[#6E756F] mt-0.5">
+                  Max 4 photos for the product page gallery. First photo is the primary cover image.
+                </p>
+              </div>
+
+              {photos.length < 4 && (
+                <button
+                  type="button"
+                  onClick={handleAddPhoto}
+                  className="px-2.5 py-1.5 bg-[#FAF8F5] hover:bg-gray-100 border border-[#E5E2DC] text-[#163422] text-[11px] font-bold rounded flex items-center gap-1 cursor-pointer transition"
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#163422]" />
+                  <span>Add Photo ({photos.length}/4)</span>
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1">
+              {photos.map((photoUrl, idx) => (
+                <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-[#FAF8F5] p-2.5 rounded-md border border-[#E5E2DC]">
+                  <div className="w-14 h-14 rounded border border-[#E5E2DC] bg-white overflow-hidden shrink-0 relative flex items-center justify-center">
+                    {photoUrl ? (
+                      <img src={photoUrl} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="w-5 h-5 text-gray-300" />
+                    )}
+                    {idx === 0 && (
+                      <span className="absolute bottom-0 inset-x-0 bg-[#163422] text-white text-[7px] font-bold text-center py-0.5 uppercase tracking-wider">
+                        Cover
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 w-full flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[9px] font-bold text-[#6E756F] uppercase">
+                        {idx === 0 ? 'Main Cover Photo' : `Photo ${idx + 1}`}
+                      </label>
+                      <label className="text-[10px] text-[#163422] font-semibold hover:underline cursor-pointer flex items-center gap-1">
+                        <Upload className="w-3 h-3" />
+                        <span>Upload file</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(idx, e.target.files?.[0])}
+                        />
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Image URL or upload..."
+                      value={photoUrl}
+                      onChange={(e) => handlePhotoChange(idx, e.target.value)}
+                      className="w-full bg-white border border-[#E5E2DC] rounded px-2.5 py-1.5 text-xs text-[#1C1B1B] font-mono focus:outline-none focus:border-[#163422]"
+                    />
+                  </div>
+
+                  {photos.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePhoto(idx)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 rounded cursor-pointer transition self-end sm:self-center"
+                      title="Remove photo"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* Action Buttons */}
           <div className="pt-4 border-t border-[#E5E2DC] flex justify-end gap-3">

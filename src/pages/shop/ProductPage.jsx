@@ -3,12 +3,12 @@ import { useParams, useNavigate, useLocation } from "react-router-dom"
 import Container from "../../components/common/Container"
 import Cash from "/src/assets/image/icons/brown-cash.svg"
 import Shipping from "/src/assets/image/icons/brown-shipping.svg"
-import { getProductBySlug, getSizeOptionsWithPrices, getCleanDescription } from "../../data/productService"
+import { getProductBySlug, getSizeOptionsWithPrices, getCleanDescription, getProductGalleryImages } from "../../data/productService"
 import Arrows from "/src/assets/image/icons/arrow.svg"
 import { useAuth } from "../../context/AuthContext"
 import { useCart } from "../../context/CartContext"
 import { toast } from "sonner"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
 import Climate from "/src/assets/image/icons/climate-precision.svg"
 import Selection from "/src/assets/image/icons/enclosure-selection.svg"
 import Security from "/src/assets/image/icons/security-hides.svg"
@@ -203,10 +203,21 @@ const ProductPage = () => {
     category
   } = product
 
-  const galleryImages = [thumbnail, thumbnail]
+  const galleryImages = getProductGalleryImages(product)
+  const safeIndex = selectedImageIndex >= galleryImages.length ? 0 : selectedImageIndex
   const currentSizeOptions = getSizeOptionsWithPrices(product)
   const activePrice = selectedSize?.price ?? (typeof price === 'number' ? price : (parseFloat(String(price || 0).replace(/[^\d.]/g, '')) || 0))
   const cleanDescription = getCleanDescription(description)
+
+  const handlePrevImage = (e) => {
+    e?.stopPropagation()
+    setSelectedImageIndex((prev) => (prev - 1 + galleryImages.length) % galleryImages.length)
+  }
+
+  const handleNextImage = (e) => {
+    e?.stopPropagation()
+    setSelectedImageIndex((prev) => (prev + 1) % galleryImages.length)
+  }
 
   return (
     <div className="bg-white min-h-screen py-6">
@@ -224,35 +235,73 @@ const ProductPage = () => {
         {/* Product Hero Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 items-start mb-10">
 
-          {/* Left Column: Image Gallery */}
+          {/* Left Column: Image Gallery (Max 4 Photos, Clickable, Prev/Next Navigation, Dynamic Thumbnails) */}
           <div className="flex flex-col gap-3">
-            <div className="relative w-full h-64 sm:h-80 md:h-96 lg:h-100 rounded-sm overflow-hidden border border-[#E5E2DC] bg-[#FAF8F5]">
+            <div className="relative w-full h-64 sm:h-80 md:h-96 lg:h-100 rounded-sm overflow-hidden border border-[#E5E2DC] bg-[#FAF8F5] group select-none">
               <img
-                src={galleryImages[selectedImageIndex] || thumbnail}
+                src={galleryImages[safeIndex] || thumbnail}
                 alt={name}
-                className="w-full h-full object-cover"
+                onClick={galleryImages.length > 1 ? handleNextImage : undefined}
+                className={`w-full h-full object-cover transition-opacity duration-300 ${galleryImages.length > 1 ? 'cursor-pointer' : ''}`}
+                title={galleryImages.length > 1 ? 'Click to view next image' : name}
               />
+              
               {temperament && (
-                <span className="absolute top-3 left-3 bg-[#785832] font-hanken text-white px-2 py-0.5 uppercase text-[9px] font-bold rounded-xs tracking-wider">
+                <span className="absolute top-3 left-3 bg-[#785832] font-hanken text-white px-2 py-0.5 uppercase text-[9px] font-bold rounded-xs tracking-wider z-10 shadow-2xs">
                   {temperament}
                 </span>
               )}
+
+              {/* Prev / Next Navigation Arrows */}
+              {galleryImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrevImage}
+                    aria-label="Previous Image"
+                    title="Previous Image"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/85 hover:bg-white text-[#163422] shadow-md flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer z-10 hover:scale-105"
+                  >
+                    <ChevronLeft className="w-5 h-5 text-[#163422]" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextImage}
+                    aria-label="Next Image"
+                    title="Next Image"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/85 hover:bg-white text-[#163422] shadow-md flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer z-10 hover:scale-105"
+                  >
+                    <ChevronRight className="w-5 h-5 text-[#163422]" />
+                  </button>
+
+                  {/* Image Counter Badge */}
+                  <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold font-hanken px-2.5 py-1 rounded-full z-10">
+                    {safeIndex + 1} / {galleryImages.length}
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* Thumbnails */}
-            <div className="flex items-center gap-2.5">
-              {galleryImages.map((img, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setSelectedImageIndex(idx)}
-                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-sm overflow-hidden border cursor-pointer transition ${
-                    selectedImageIndex === idx ? "border-[#163422]" : "border-[#E5E2DC]"
-                  }`}
-                >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
+            {/* Small Preview Thumbnails at bottom (only showing how many images were added) */}
+            {galleryImages.length > 1 && (
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                {galleryImages.map((img, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setSelectedImageIndex(idx)}
+                    aria-label={`View photo ${idx + 1}`}
+                    className={`w-14 h-14 sm:w-16 sm:h-16 rounded-sm overflow-hidden border cursor-pointer transition shrink-0 ${
+                      safeIndex === idx
+                        ? "border-[#163422] ring-2 ring-[#163422]/20 scale-102"
+                        : "border-[#E5E2DC] opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    <img src={img} alt={`${name} preview ${idx + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Right Column: Purchase Box */}

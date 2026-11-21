@@ -55,6 +55,9 @@ const InventoryTable = () => {
 
           return {
             id: p.id,
+            rawProduct: p,
+            description: p.description,
+            images: p.images,
             thumbnail: img,
             species: p.name,
             commonName: p.common_name || p.name,
